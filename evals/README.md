@@ -21,4 +21,5 @@ pnpm eval --only csv-quoted-fields --repeat 3 --max-cost 0.25 --concurrency 2
 The report has success rate by difficulty and category, total cost, passes per dollar, median cost per pass, and how
 many attempts passed the visible tests but failed the hidden ones.
 
-The current set is small and easy. It is a smoke test for the harness, not a benchmark; harder multi-step tasks are next.
+The current tasks are small, self-contained puzzles. Current models solve all of them, so they work as a smoke test
+for the harness, not as a benchmark. Tasks built from real repositories and real fixing commits are next.
