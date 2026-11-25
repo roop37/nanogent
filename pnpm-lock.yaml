@@ -41,6 +41,9 @@ importers:
       '@nanogent/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@nanogent/evals':
+        specifier: workspace:*
+        version: link:../../packages/evals
       '@nanogent/sandbox':
         specifier: workspace:*
         version: link:../../packages/sandbox
@@ -89,6 +92,19 @@ importers:
       zod:
         specifier: 4.3.6
         version: 4.3.6
+
+  packages/evals:
+    dependencies:
+      '@nanogent/core':
+        specifier: workspace:*
+        version: link:../core
+      zod:
+        specifier: 4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@nanogent/sandbox':
+        specifier: workspace:*
+        version: link:../sandbox
 
   packages/harness:
     dependencies:
