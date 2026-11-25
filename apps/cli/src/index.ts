@@ -1,7 +1,9 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { parseArgs } from "node:util";
 import Anthropic from "@anthropic-ai/sdk";
 import { ClaudeBrain, type MessagesClient } from "@nanogent/brain";
-import { loadConfig, requireAnthropicApiKey } from "@nanogent/config";
+import { type Config, loadConfig, requireAnthropicApiKey } from "@nanogent/config";
 import { LocalController } from "@nanogent/controller";
 import {
   createRunId,
@@ -12,6 +14,16 @@ import {
   redact,
   type SandboxProvider,
 } from "@nanogent/core";
+import {
+  type Change,
+  checkTasks,
+  type EvalTask,
+  loadTasks,
+  runEval,
+  summarize,
+  toMarkdown,
+  verifyHidden,
+} from "@nanogent/evals";
 import { DockerSandboxProvider } from "@nanogent/sandbox";
 import { JsonlRunStore } from "@nanogent/store";
 
@@ -33,6 +45,12 @@ function eventLine(event: RunEvent, cost: number): string {
 function summary(result: RunResult): string {
   return `${result.status}: ${result.summary}\n${result.verified ? "Verified: PASS" : result.verify ? "Verified: FAIL" : "UNVERIFIED: no harness verification"}\n${result.failureReason ?? ""}\n${result.verify?.output ?? ""}\nCost: $${result.usage.costUsd.toFixed(4)}\n${result.diff}\n`;
 }
+function client(deps: CliDeps, config: Config): MessagesClient {
+  return (
+    deps.client ??
+    new Anthropic({ apiKey: requireAnthropicApiKey(config), maxRetries: 2 }).beta.messages
+  );
+}
 export async function runCli(args: string[], deps: CliDeps = {}): Promise<number> {
   const write = deps.write ?? ((text: string) => process.stdout.write(text));
   const parsed = parseArgs({
@@ -51,6 +69,12 @@ export async function runCli(args: string[], deps: CliDeps = {}): Promise<number
       json: { type: "boolean" },
       "max-age": { type: "string" },
       ref: { type: "string" },
+      tasks: { type: "string" },
+      only: { type: "string" },
+      repeat: { type: "string" },
+      concurrency: { type: "string" },
+      out: { type: "string" },
+      check: { type: "boolean" },
     },
   });
   const env = { ...(deps.env ?? process.env) };
@@ -89,6 +113,69 @@ export async function runCli(args: string[], deps: CliDeps = {}): Promise<number
     );
     return 0;
   }
+  if (command === "eval") {
+    const provider = deps.provider ?? new DockerSandboxProvider();
+    const tasks = await loadTasks(
+      parsed.values.tasks ?? "evals/tasks",
+      parsed.values.only?.split(",").map((s) => s.trim()),
+    );
+    const concurrency = Number(parsed.values.concurrency ?? 2);
+    const grade = (task: EvalTask, change: Change) => verifyHidden(task, change, provider);
+    if (parsed.values.check) {
+      const checks = await checkTasks(tasks, grade, concurrency);
+      for (const c of checks)
+        write(
+          `${c.baselineFails && c.solutionPasses ? "ok  " : "BAD "} ${c.taskId}${c.baselineFails ? "" : " (passes without changes)"}${c.solutionPasses ? "" : " (solution fails)"}${c.detail ? ` ${c.detail}` : ""}\n`,
+        );
+      return checks.every((c) => c.baselineFails && c.solutionPasses) ? 0 : 1;
+    }
+    const startedAt = new Date().toISOString();
+    const controller = new LocalController(store, new ClaudeBrain(client(deps, config)), provider);
+    const maxCost = Number(parsed.values["max-cost"] ?? 0.5);
+    const attempts = await runEval({
+      tasks,
+      repeat: Number(parsed.values.repeat ?? 1),
+      concurrency,
+      grade,
+      runTask: async (task) => {
+        const spec = RunSpecSchema.parse({
+          id: createRunId(),
+          repo: { localPath: task.repoDir },
+          task: task.instruction,
+          setupCommands: task.setup,
+          verifyCommand: task.verify,
+          model: config.model,
+          effort: config.effort,
+          refusalFallback: config.refusalFallback,
+          limits: {
+            ...DEFAULT_LIMITS,
+            maxCostUsd: maxCost,
+            ...(parsed.values["max-turns"] && { maxTurns: Number(parsed.values["max-turns"]) }),
+          },
+        });
+        const runId = await controller.submit(spec);
+        let result: RunResult | undefined;
+        for await (const event of controller.watch(runId))
+          if (event.type === "run.result") result = event.data;
+        if (!result) throw new Error(`Run ${runId} ended without a result`);
+        return { runId, result };
+      },
+      onAttempt: (a) =>
+        write(
+          `${a.passed ? "pass" : "fail"} ${a.taskId} #${a.attempt} $${a.costUsd.toFixed(4)} ${(a.durationMs / 1000).toFixed(1)}s${a.passed ? "" : ` ${a.gradingError ?? a.failureReason ?? ""}`}\n`,
+        ),
+    });
+    const report = summarize(attempts, { model: config.model, effort: config.effort, startedAt });
+    const out =
+      parsed.values.out ??
+      join(config.home, "evals", `${startedAt.replaceAll(/[:.]/g, "-")}-${config.model}`);
+    await mkdir(out, { recursive: true });
+    await writeFile(join(out, "report.json"), `${JSON.stringify({ report, attempts }, null, 2)}\n`);
+    const markdown = toMarkdown(report, attempts);
+    await writeFile(join(out, "report.md"), markdown);
+    write(parsed.values.json ? `${JSON.stringify(report)}\n` : `\n${markdown}\nSaved to ${out}\n`);
+    return 0;
+  }
   if (command !== "run" || !parsed.values.repo || !parsed.values.task)
     throw new Error(
       'Usage: nanogent run --repo <url|path> --task "text" [--verify "cmd"] [--setup "cmd"]',
@@ -111,12 +198,9 @@ export async function runCli(args: string[], deps: CliDeps = {}): Promise<number
       ...(parsed.values["max-turns"] && { maxTurns: Number(parsed.values["max-turns"]) }),
     },
   });
-  const client =
-    deps.client ??
-    new Anthropic({ apiKey: requireAnthropicApiKey(config), maxRetries: 2 }).beta.messages;
   const controller = new LocalController(
     store,
-    new ClaudeBrain(client),
+    new ClaudeBrain(client(deps, config)),
     deps.provider ?? new DockerSandboxProvider(),
   );
   const runId = await controller.submit(spec);

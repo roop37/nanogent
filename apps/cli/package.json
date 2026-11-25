@@ -23,7 +23,8 @@
     "@nanogent/store": "workspace:*",
     "@nanogent/controller": "workspace:*",
     "@anthropic-ai/sdk": "1.14.0",
-    "zod": "4.3.6"
+    "zod": "4.3.6",
+    "@nanogent/evals": "workspace:*"
   },
   "bin": {
     "nanogent": "./dist/bin.js"

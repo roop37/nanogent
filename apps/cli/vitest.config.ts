@@ -19,6 +19,9 @@ export default defineConfig({
         new URL("../../packages/controller/src/index.ts", import.meta.url),
       ),
       "@nanogent/core": fileURLToPath(new URL("../../packages/core/src/index.ts", import.meta.url)),
+      "@nanogent/evals": fileURLToPath(
+        new URL("../../packages/evals/src/index.ts", import.meta.url),
+      ),
       "@nanogent/config": fileURLToPath(
         new URL("../../packages/config/src/index.ts", import.meta.url),
       ),
