@@ -1,0 +1,8 @@
+{
+  "id": "cursor-pagination",
+  "title": "Switch item listing from offsets to cursors",
+  "difficulty": "hard",
+  "category": "multi-file",
+  "instruction": "Offset pagination in listItems skips or repeats items when items are added or deleted between page requests. Replace it with cursor pagination: listItems(store, { limit, cursor }) returns { items, nextCursor }, where items are ordered by id, nextCursor is an opaque string that continues right after the last item returned, and nextCursor is null when there are no more items (don't hand out a cursor that leads to an empty page). Remove nextOffset. limit defaults to 20 and is capped at 100. A malformed cursor throws an error whose message mentions 'cursor'. Update fetchAll in client.js to use cursors.",
+  "verify": "node --test"
+}

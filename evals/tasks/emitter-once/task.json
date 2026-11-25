@@ -1,0 +1,8 @@
+{
+  "id": "emitter-once",
+  "title": "Event emitter: once handlers leak and fire repeatedly",
+  "difficulty": "hard",
+  "category": "debugging",
+  "instruction": "Our small Emitter class has several reported problems: once() handlers fire on every emit and are never removed, off(event, fn) can't remove a handler registered with once(), and when a handler unsubscribes itself during emit the next handler is sometimes skipped. Fix the class so that once() handlers run at most once, off() with the original function removes them, unsubscribing during emit never skips other handlers, and handlers added during an emit only run on the next emit. Keep the public API (on, once, off, emit, listenerCount) the same.",
+  "verify": "node --test"
+}

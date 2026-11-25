@@ -58,7 +58,7 @@ async function solutionPatch(task: EvalTask): Promise<string> {
 describe("tasks", () => {
   it("loads the bundled suite", async () => {
     const tasks = await loadTasks(TASKS);
-    expect(tasks).toHaveLength(10);
+    expect(tasks).toHaveLength(14);
     expect(new Set(tasks.map((t) => t.category))).toEqual(
       new Set(["bug", "multi-file", "debugging", "refactor", "environment"]),
     );

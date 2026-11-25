@@ -1,0 +1,8 @@
+{
+  "id": "timezone-report",
+  "title": "Daily sales report uses the wrong day",
+  "difficulty": "hard",
+  "category": "debugging",
+  "instruction": "Shops in India report that orders placed late in the evening show up on the wrong day in the daily sales report, and the per-day order drill-down doesn't add up to the daily totals. Both dailyTotals and ordersOn take the shop's UTC offset in minutes (330 for India, -300 for New York in winter). Make both group orders by the calendar day in the shop's timezone and make them agree with each other.",
+  "verify": "node --test"
+}

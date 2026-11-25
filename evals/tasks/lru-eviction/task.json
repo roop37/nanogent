@@ -1,0 +1,8 @@
+{
+  "id": "lru-eviction",
+  "title": "LRU cache evicts the wrong entries",
+  "difficulty": "medium",
+  "category": "bug",
+  "instruction": "LruCache in lru.js is supposed to be a least-recently-used cache, but it grows past its capacity and evicts entries that were just read. Make it behave like a proper LRU cache: never more than `capacity` entries, reading or overwriting a key makes it the most recently used, inserting a new key into a full cache evicts the least recently used one, and keys() lists entries from least to most recently used. has() should not change the order. Keep the public API the same.",
+  "verify": "node --test"
+}
