@@ -1,0 +1,11 @@
+node_modules/
+.pnpm-store/
+dist/
+.turbo/
+coverage/
+.nanogent/
+runs/
+*.log
+.env
+.env.*
+.DS_Store
