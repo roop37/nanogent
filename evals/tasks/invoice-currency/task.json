@@ -1,0 +1,8 @@
+{
+  "id": "invoice-currency",
+  "title": "Support EUR and INR on invoices",
+  "difficulty": "medium",
+  "category": "multi-file",
+  "instruction": "Invoices can now be in USD, EUR or INR. Give formatPrice an optional currency argument (default USD; symbols are the dollar sign, the euro sign and the Indian rupee sign; any other currency throws an error whose message mentions 'currency'). renderInvoice should use the invoice's currency field and default to USD.",
+  "verify": "node --test"
+}

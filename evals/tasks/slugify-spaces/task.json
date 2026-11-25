@@ -1,0 +1,8 @@
+{
+  "id": "slugify-spaces",
+  "title": "Slugs contain double and trailing hyphens",
+  "difficulty": "easy",
+  "category": "bug",
+  "instruction": "slugify() produces slugs like 'hello--world' or '-hello-' when titles have extra spaces or punctuation. Slugs should only contain lowercase letters, digits and single hyphens, with no hyphen at the start or end. Fix it.",
+  "verify": "node --test"
+}

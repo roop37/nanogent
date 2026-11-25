@@ -1,0 +1,8 @@
+{
+  "id": "missing-await",
+  "title": "Signup test fails: welcome email not sent",
+  "difficulty": "easy",
+  "category": "debugging",
+  "instruction": "npm test fails on the welcome email test. Find out why and fix the application code. Do not change the tests.",
+  "verify": "node --test"
+}

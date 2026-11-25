@@ -1,0 +1,8 @@
+{
+  "id": "shared-email-check",
+  "title": "Share one email check between signup and newsletter",
+  "difficulty": "medium",
+  "category": "refactor",
+  "instruction": "signup.js and newsletter.js each validate email addresses their own way and disagree. Create email.js exporting isEmail(value) and use it in both. A valid address has no spaces, exactly one @, something before it, and a domain with at least one dot and no empty parts (so a@b and a@b. are invalid). Surrounding whitespace is ignored. The newsletter should store the trimmed, lowercased address.",
+  "verify": "node --test"
+}

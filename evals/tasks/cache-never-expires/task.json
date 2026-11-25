@@ -1,0 +1,8 @@
+{
+  "id": "cache-never-expires",
+  "title": "Cached entries never expire",
+  "difficulty": "easy",
+  "category": "debugging",
+  "instruction": "Users report that entries in TtlCache never seem to expire. An entry should be returned while less than ttlSeconds have passed and treated as expired (and removed) once ttlSeconds or more have passed. Find the cause and fix it.",
+  "verify": "node --test"
+}

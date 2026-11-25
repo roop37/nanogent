@@ -1,0 +1,8 @@
+{
+  "id": "npm-test-script",
+  "title": "npm test does nothing",
+  "difficulty": "easy",
+  "category": "environment",
+  "instruction": "Running npm test in this project fails with 'Missing script'. Make npm test run every test file under test/ with Node's built-in test runner. Don't add dependencies.",
+  "verify": "npm test --silent"
+}

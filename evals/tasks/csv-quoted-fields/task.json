@@ -1,0 +1,8 @@
+{
+  "id": "csv-quoted-fields",
+  "title": "CSV parser breaks on quoted fields",
+  "difficulty": "medium",
+  "category": "bug",
+  "instruction": "Importing a customer CSV fails when a field contains a comma: 1,\"Smith, John\",NY becomes four columns. Make parseLine follow normal CSV quoting: a field may be wrapped in double quotes, commas inside quotes belong to the field, and a doubled quote inside a quoted field is a literal quote. Unquoted fields are still trimmed.",
+  "verify": "node --test"
+}

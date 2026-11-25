@@ -1,0 +1,8 @@
+{
+  "id": "days-inclusive",
+  "title": "daysTouched is off by one",
+  "difficulty": "easy",
+  "category": "bug",
+  "instruction": "daysTouched('2026-03-01', '2026-03-04') returns 3 but the booking touches 4 calendar days (both the first and the last day count). Fix daysTouched without changing nights().",
+  "verify": "node --test"
+}

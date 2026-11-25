@@ -1,0 +1,8 @@
+{
+  "id": "rename-username",
+  "title": "Rename userName to username in the users API",
+  "difficulty": "medium",
+  "category": "multi-file",
+  "instruction": "The users API should use the field name username instead of userName everywhere: request bodies, validation messages, the stored user and the JSON response. The old name should no longer be accepted. Update the existing test as well.",
+  "verify": "node --test"
+}

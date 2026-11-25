@@ -1,0 +1,8 @@
+{
+  "id": "discount-before-tax",
+  "title": "Discount applied after tax",
+  "difficulty": "easy",
+  "category": "bug",
+  "instruction": "Our accountant says cart totals are wrong: the percentage discount must be applied to the subtotal before tax, and the discounted subtotal rounded to whole cents before tax is added. The final total is also rounded to whole cents. Fix total() in cart.js.",
+  "verify": "node --test"
+}
