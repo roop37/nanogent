@@ -3,10 +3,11 @@
 **Done**
 - Workspace, tooling, CI, core contracts (run states, events, budgets, pricing).
 - Local engine: Docker sandbox, agent loop, tools and permission policy, JSONL run store, `nanogent` CLI.
+- Eval suite: 10 small tasks with hidden tests, grading in a fresh sandbox, `nanogent eval` report.
 
 **Next**
-- Evaluation suite: task format, a first set of 10 tasks, a verifier that applies the diff in a fresh sandbox, and a
-  report with success rate, cost, time and verified successes per dollar. Baseline against mini-SWE-agent.
+- Harder eval tasks (multi-step, larger repos, real dependencies) so the suite can tell changes apart; baseline
+  against mini-SWE-agent with the same model and budget.
 
 **After that**
 - Hosted version: web dashboard with sign-in, runs and events in Postgres, jobs on Trigger.dev, Daytona sandboxes, live

@@ -56,7 +56,7 @@ Tests never call the model API; the model client is replaced with scripted respo
 
 ## Status
 
-Early. The local engine works end to end. Next up are an evaluation suite and a hosted version. See
+Early. The local engine and a small eval suite work end to end. Next up are harder eval tasks and a hosted version. See
 [ROADMAP.md](ROADMAP.md) and [docs/design.md](docs/design.md).
 
 ## License

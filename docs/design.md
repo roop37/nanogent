@@ -26,6 +26,7 @@ human has looked at it.
 | `sandbox` | Docker sandbox provider; later a hosted one |
 | `store` | Run storage, JSONL on disk for now |
 | `controller` | Submit, cancel, approve, watch |
+| `evals` | Eval tasks, hidden-test grading, reports |
 | `apps/cli` | The `nanogent` command |
 
 Run states: `queued → running → completed | failed | canceled`, with `running ↔ awaiting_approval` for actions that need
