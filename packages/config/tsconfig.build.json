@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "paths": { "@nanogent/core": ["./packages/core/dist/index.d.ts"] },
+    "baseUrl": "../.."
+  },
+  "include": ["src/**/*.ts"]
+}
