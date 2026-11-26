@@ -54,9 +54,16 @@ Configuration is read from the environment:
 
 Tests never call the model API; the model client is replaced with scripted responses.
 
+## Hosted mode
+
+The web dashboard supports email/password sign-in, task submission, live events, cancellation, verification and diff
+review. Neon stores runs, Trigger.dev runs the worker, and Daytona supplies sandboxes. The web server never receives
+model or sandbox credentials. See [web setup](apps/web/README.md) for environment variables and human deployment steps.
+
 ## Status
 
-Early. The local engine and a small eval suite work end to end. Next up are harder eval tasks and a hosted version. See
+The local engine, eval suite and hosted dashboard are implemented. Live service deployment still needs the checks in
+the setup guide. Next up are harder eval tasks and private repository integration. See
 [ROADMAP.md](ROADMAP.md) and [docs/design.md](docs/design.md).
 
 ## License
