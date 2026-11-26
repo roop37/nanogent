@@ -31,3 +31,11 @@ Direct dependencies are pinned; `pnpm-lock.yaml` has the full graph. All are per
 
 The web button, input, textarea, badge and card components are adapted from shadcn/ui's MIT-licensed New York registry.
 Its license is included in `apps/web/components/ui/LICENSE`.
+
+| Package | License | Used for |
+| --- | --- | --- |
+| `lucide-react` | ISC | Interface icons |
+| `cmdk` | MIT | Keyboard command palette |
+| `@radix-ui/react-dialog`, `@radix-ui/react-popover` | MIT | Focus-managed dialogs, drawer and menus |
+| `@radix-ui/react-tooltip`, `@radix-ui/react-tabs` | MIT | Accessible tooltips and tabs |
+| `@fontsource-variable/inter`, `@fontsource-variable/jetbrains-mono` | MIT packaging; SIL OFL-1.1 fonts | Self-hosted UI and code fonts |
