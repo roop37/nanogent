@@ -34,17 +34,10 @@ pnpm sandbox:build       # builds the sandbox image
 node apps/worker/dist/main.js
 ```
 
-A systemd unit, with the service user and Docker set up as described in [security](../../docs/security.md), looks like:
-
-```ini
-[Service]
-User=nanogent
-WorkingDirectory=/opt/nanogent/repos/nanogent
-EnvironmentFile=/etc/nanogent/runner.env
-ExecStart=/usr/bin/node apps/worker/dist/main.js
-Restart=always
-TimeoutStopSec=330
-```
+[`deploy/nanogent-runner.service`](deploy/nanogent-runner.service) is a systemd unit for this. It assumes a dedicated
+`nanogent` user (uid 1002) with rootless Docker, the checkout in `/opt/nanogent/repo` and the variables above in
+`/etc/nanogent/runner.env` (`root:nanogent`, mode 640). Rootless Docker needs `DOCKER_HOST=unix:///run/user/1002/docker.sock`
+in that file; see [security](../../docs/security.md#runner-host).
 
 ## Waking the runner
 

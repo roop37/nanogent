@@ -1,0 +1,21 @@
+[Unit]
+Description=Nanogent runner
+After=network-online.target user@1002.service
+Wants=network-online.target
+Requires=user@1002.service
+
+[Service]
+User=nanogent
+WorkingDirectory=/opt/nanogent/repo
+EnvironmentFile=/etc/nanogent/runner.env
+ExecStart=/usr/local/bin/node apps/worker/dist/main.js
+Restart=always
+RestartSec=5
+# Running runs get NANOGENT_DRAIN_SEC (300) to finish on shutdown.
+TimeoutStopSec=330
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target
