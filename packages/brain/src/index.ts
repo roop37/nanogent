@@ -18,7 +18,6 @@ export interface MessagesClient {
     options?: Parameters<StreamMethod>[1],
   ): Pick<ReturnType<StreamMethod>, "finalMessage">;
 }
-const system = readFileSync(new URL("../../../prompts/system.md", import.meta.url), "utf8");
 
 async function checkBudget(ctx: AgentContext): Promise<void> {
   ctx.signal.throwIfAborted();
@@ -46,6 +45,10 @@ export class ClaudeBrain implements Brain {
   constructor(
     private readonly client: MessagesClient,
     private readonly retryDelayMs = 500,
+    private readonly systemPrompt = readFileSync(
+      new URL("../../../prompts/system.md", import.meta.url),
+      "utf8",
+    ),
   ) {}
   async run(ctx: AgentContext): Promise<AgentOutcome> {
     const history: Anthropic.Beta.Messages.BetaMessageParam[] = [...ctx.history];
@@ -67,7 +70,7 @@ export class ClaudeBrain implements Brain {
           thinking: { type: "adaptive" },
           output_config: { effort: ctx.spec.effort },
           cache_control: { type: "ephemeral" },
-          system,
+          system: this.systemPrompt.replaceAll("/workspace", ctx.sandbox.workspace ?? "/workspace"),
           messages: [...history],
           tools: ctx.tools.flatMap((tool) => (tool.modelDefinition ? [tool.modelDefinition] : [])),
           ...(fallback ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" } : {}),

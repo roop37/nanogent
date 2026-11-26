@@ -2,11 +2,11 @@ import { posix } from "node:path";
 import type { Tool } from "@nanogent/core";
 import { z } from "zod";
 
-export function workspacePath(path: string): string {
+export function workspacePath(path: string, workspace = "/workspace"): string {
   if (path.includes("%") || path.includes("\0"))
     throw new Error("Encoded or null paths are forbidden");
-  const resolved = posix.resolve("/workspace", path);
-  if (resolved !== "/workspace" && !resolved.startsWith("/workspace/"))
+  const resolved = posix.resolve(workspace, path);
+  if (resolved !== workspace && !resolved.startsWith(`${workspace}/`))
     throw new Error("Path escapes /workspace");
   return resolved;
 }
@@ -37,7 +37,7 @@ const editorInput = z.discriminatedUnion("command", [
 ]);
 const submitInput = z.strictObject({ summary: z.string().min(1).max(30_000) });
 
-export function builtInTools(): Tool[] {
+export function builtInTools(workspace = "/workspace"): Tool[] {
   return [
     {
       name: "bash",
@@ -60,13 +60,13 @@ export function builtInTools(): Tool[] {
     },
     {
       name: "str_replace_based_edit_tool",
-      description: "View or edit files in /workspace.",
+      description: `View or edit files in ${workspace}.`,
       risk: "write",
       inputSchema: editorInput,
       modelDefinition: { type: "text_editor_20250728", name: "str_replace_based_edit_tool" },
       async run(raw, ctx) {
         const input = editorInput.parse(raw);
-        const path = workspacePath(input.path);
+        const path = workspacePath(input.path, workspace);
         if (input.command === "create") {
           await ctx.sandbox.writeFile(path, input.file_text, ctx.signal);
           return `Created ${path}`;

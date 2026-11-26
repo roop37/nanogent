@@ -143,3 +143,10 @@ it("honors cancellation before a model request", async () => {
   expect(await fake.brain.run({ ...ctx, tools: [] })).toMatchObject({ status: "canceled" });
   expect(fake.requests).toHaveLength(0);
 });
+it("uses the sandbox workspace in the system prompt", async () => {
+  const fake = scripted([message([toolCall("submit", { summary: "done" })])]);
+  const { ctx } = runtime();
+  const sandbox = { ...ctx.sandbox, workspace: "/home/daytona/workspace" };
+  await fake.brain.run({ ...ctx, sandbox, tools: builtInTools(sandbox.workspace) });
+  expect(fake.requests[0]?.system).toContain("/home/daytona/workspace");
+});

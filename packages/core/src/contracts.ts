@@ -72,9 +72,10 @@ export interface ExecOptions {
   signal?: AbortSignal;
 }
 
-/** Paths must be confined to /workspace; output limits are UTF-8 bytes, not characters. */
+/** Paths must be confined to the sandbox workspace; output limits are UTF-8 bytes, not characters. */
 export interface Sandbox {
   readonly id: string;
+  readonly workspace?: string;
   exec(command: string, options: ExecOptions): Promise<ExecResult>;
   bash(
     command: string | undefined,

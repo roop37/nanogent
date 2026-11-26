@@ -4,17 +4,18 @@ import os
 import stat
 import sys
 
+workspace = sys.argv[2] if len(sys.argv) > 2 else '/workspace'
 request = json.loads(base64.b64decode(sys.argv[1]))
 path = request['path']
 if '%' in path or '\x00' in path:
     raise ValueError('Encoded or null paths are forbidden')
 if not path.startswith('/'):
-    path = '/workspace/' + path
+    path = workspace + '/' + path
 path = os.path.normpath(path)
-if path != '/workspace' and not path.startswith('/workspace/'):
+if path != workspace and not path.startswith(workspace + '/'):
     raise ValueError('Path escapes /workspace')
-parts = path.split('/')[2:]
-fd = os.open('/workspace', os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+parts = os.path.relpath(path, workspace).split('/')
+fd = os.open(workspace, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
 try:
     for part in parts[:-1]:
         child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)

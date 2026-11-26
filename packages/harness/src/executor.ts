@@ -58,7 +58,7 @@ export class Executor {
         signal,
       };
       const registry = new ToolRegistry(
-        builtInTools(),
+        builtInTools(sandbox.workspace),
         new PermissionPolicy(spec.policy),
         deps.approve,
       );

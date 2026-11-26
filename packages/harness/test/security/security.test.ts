@@ -144,3 +144,16 @@ it("defaults network and external tools to deny, and gates ask decisions", async
   );
   expect(sandbox.bash).toHaveBeenCalledOnce();
 });
+it("confines editor paths to the hosted workspace", async () => {
+  const workspace = "/home/daytona/workspace";
+  const { ctx, sandbox } = runtime();
+  const registry = new ToolRegistry(builtInTools(workspace), new PermissionPolicy(ctx.spec.policy));
+  await registry.execute(
+    "str_replace_based_edit_tool",
+    { command: "create", path: "new.ts", file_text: "ok" },
+    ctx,
+  );
+  expect(sandbox.writeFile).toHaveBeenCalledWith(`${workspace}/new.ts`, "ok", ctx.signal);
+  for (const path of ["../../secret", "/workspace/file", "/home/daytona/workspace-other/file"])
+    expect(() => workspacePath(path, workspace)).toThrow();
+});
