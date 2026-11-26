@@ -1,5 +1,5 @@
 export function Diff({ diff }: { diff: string }) {
-  if (!diff) return <p className="p-5 text-slate-500">No changes recorded.</p>;
+  if (!diff) return <p className="p-5 text-muted-foreground">No changes recorded.</p>;
   const lines = diff.split("\n").map((text, number) => ({ text, number }));
   return (
     <section aria-label="Diff">
@@ -8,14 +8,14 @@ export function Diff({ diff }: { diff: string }) {
           const header =
             text.startsWith("diff --git") || text.startsWith("--- ") || text.startsWith("+++ ");
           const color = header
-            ? "bg-slate-100 font-semibold text-slate-800"
+            ? "bg-panel font-semibold text-foreground"
             : text.startsWith("+")
-              ? "bg-emerald-50 text-emerald-900"
+              ? "bg-added text-foreground"
               : text.startsWith("-")
-                ? "bg-red-50 text-red-900"
+                ? "bg-removed text-foreground"
                 : text.startsWith("@@")
-                  ? "bg-indigo-50 text-indigo-800"
-                  : "text-slate-600";
+                  ? "bg-selection text-link"
+                  : "text-muted-foreground";
           return (
             <span key={number} className={`block min-h-6 px-5 ${color}`}>
               {text || " "}

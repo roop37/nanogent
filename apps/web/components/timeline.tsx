@@ -7,7 +7,7 @@ function Content({ event }: { event: RunEvent }) {
       return (
         <>
           <p className="font-medium">{event.data.name}</p>
-          <pre className="mt-1 text-slate-600">
+          <pre className="mt-1 text-muted-foreground">
             {JSON.stringify(event.data.input).slice(0, 240)}
           </pre>
         </>
@@ -18,9 +18,9 @@ function Content({ event }: { event: RunEvent }) {
           <summary className="text-sm font-medium">
             Tool result · {event.data.isError ? "error" : "done"} · {event.data.durationMs}ms
           </summary>
-          <pre className="mt-3 rounded-md bg-slate-50 p-3">{event.data.output}</pre>
+          <pre className="mt-3 rounded-md bg-panel p-3">{event.data.output}</pre>
           {event.data.truncated && (
-            <p className="mt-1 text-sm text-slate-500">Output truncated by the run limit.</p>
+            <p className="mt-1 text-sm text-muted-foreground">Output truncated by the run limit.</p>
           )}
         </details>
       );
@@ -29,11 +29,11 @@ function Content({ event }: { event: RunEvent }) {
         <>
           <p className="font-medium">
             Model response{" "}
-            <span className="ml-2 font-mono text-sm text-indigo-700">
+            <span className="ml-2 font-mono text-sm text-link">
               {money(event.data.usage.costUsd)}
             </span>
           </p>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-muted-foreground">
             {event.data.model} · {event.data.usage.input} input / {event.data.usage.output} output
             tokens
           </p>
@@ -45,7 +45,9 @@ function Content({ event }: { event: RunEvent }) {
       return (
         <p>
           State: {event.data.to.replaceAll("_", " ")}
-          {event.data.reason && <span className="text-slate-500"> · {event.data.reason}</span>}
+          {event.data.reason && (
+            <span className="text-muted-foreground"> · {event.data.reason}</span>
+          )}
         </p>
       );
     case "sandbox.ready":
@@ -56,12 +58,12 @@ function Content({ event }: { event: RunEvent }) {
       return <p>Result saved</p>;
     case "log":
       return (
-        <p className={event.data.level === "error" ? "text-red-700" : "text-slate-600"}>
+        <p className={event.data.level === "error" ? "text-destructive" : "text-muted-foreground"}>
           {event.data.message}
         </p>
       );
     case "budget.exceeded":
-      return <p className="text-red-700">Limit reached: {event.data.reason}</p>;
+      return <p className="text-destructive">Limit reached: {event.data.reason}</p>;
     case "approval.requested":
       return (
         <p>
@@ -78,10 +80,12 @@ export function Timeline({ events }: { events: RunEvent[] }) {
     <ol className="divide-y">
       {events.map((event) => (
         <li key={event.seq} className="flex gap-4 px-5 py-4">
-          <span className="w-9 shrink-0 pt-1 font-mono text-xs text-slate-400">#{event.seq}</span>
+          <span className="w-9 shrink-0 pt-1 font-mono text-xs text-muted-foreground">
+            #{event.seq}
+          </span>
           <div className="min-w-0 flex-1">
             <Content event={event} />
-            <time className="mt-2 block text-xs text-slate-400" dateTime={event.ts}>
+            <time className="mt-2 block text-xs text-muted-foreground" dateTime={event.ts}>
               {new Date(event.ts).toISOString().slice(11, 19)} UTC
             </time>
           </div>
@@ -89,6 +93,6 @@ export function Timeline({ events }: { events: RunEvent[] }) {
       ))}
     </ol>
   ) : (
-    <p className="p-5 text-slate-500">Loading events…</p>
+    <p className="p-5 text-muted-foreground">Loading events…</p>
   );
 }
