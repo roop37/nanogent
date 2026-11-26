@@ -6,3 +6,4 @@ export * from "./output.js";
 export * from "./redact.js";
 export * from "./schemas.js";
 export * from "./state.js";
+export * from "./wake.js";
