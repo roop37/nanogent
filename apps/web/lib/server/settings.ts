@@ -1,5 +1,5 @@
 import "server-only";
-import { DEFAULT_MODEL, ModelSchema } from "@nanogent/config";
+import { DEFAULT_MODEL, PRODUCTION_MODEL } from "@nanogent/config";
 import { z } from "zod";
 export function settings(env: Record<string, string | undefined> = process.env) {
   const cap = z.coerce
@@ -16,7 +16,7 @@ export function settings(env: Record<string, string | undefined> = process.env) 
   return {
     dailyCap: cap.data,
     maxCost: Math.min(max.data, cap.data),
-    models: env.NANOGENT_ENV === "production" ? [...ModelSchema.options] : [DEFAULT_MODEL],
+    models: [env.NANOGENT_ENV === "production" ? PRODUCTION_MODEL : DEFAULT_MODEL],
   };
 }
 export function testMode(env: Record<string, string | undefined> = process.env) {

@@ -47,7 +47,7 @@ Configuration is read from the environment:
 | Variable | Default |
 | --- | --- |
 | `NANOGENT_ENV` | `development` (`test`, `production`) |
-| `NANOGENT_MODEL` | `claude-haiku-5-5` outside production, `claude-opus-5-5` in production |
+| `NANOGENT_MODEL` | `claude-haiku-5-5` outside production, `claude-sonnet-5-5` in production |
 | `NANOGENT_EFFORT` | `medium` outside production, `high` in production |
 | `NANOGENT_REFUSAL_FALLBACK` | `off` outside production, `on` in production |
 | `NANOGENT_HOME` | `~/.nanogent` |

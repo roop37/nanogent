@@ -82,7 +82,7 @@ it.each([
   const base = { NANOGENT_ENV: environment };
   expect(loadConfig(base)).toMatchObject({
     environment,
-    model: production ? "claude-opus-5-5" : "claude-haiku-5-5",
+    model: production ? "claude-sonnet-5-5" : "claude-haiku-5-5",
     effort: production ? "high" : "medium",
     refusalFallback: production,
   });

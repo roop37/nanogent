@@ -26,7 +26,7 @@ are included. The production build needs no credentials and makes no calls to Ne
 | `NEON_AUTH_COOKIE_SECRET` | App-generated random secret of at least 32 characters; same on every web instance |
 | `NANOGENT_DATABASE_URL` | Neon Postgres connection URL for the branch containing runs and Auth users |
 | `TRIGGER_SECRET_KEY` | Trigger environment key used only by the web server to submit and cancel jobs |
-| `NANOGENT_ENV` | `development`; `production` permits all models in `packages/config` |
+| `NANOGENT_ENV` | `development` offers Haiku only; `production` offers Sonnet only |
 | `NANOGENT_DAILY_CAP_USD` | Per-user daily model-cost admission budget, default `1` USD |
 | `NANOGENT_MAX_RUN_COST_USD` | Per-run ceiling, default `1` USD, also capped by the daily budget |
 | `NEXT_TELEMETRY_DISABLED` | Optional `1` to disable Next.js telemetry |

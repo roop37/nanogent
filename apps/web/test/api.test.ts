@@ -166,11 +166,17 @@ describe("run route handlers", () => {
     expect((await submit(request("/api/runs", { ...input, ...change }))).status).toBe(400);
     expect(backend.submit).not.toHaveBeenCalled();
   });
-  it("allows configured production models but still enforces the cost ceiling", async () => {
+  it("offers only Sonnet in production and still enforces the cost ceiling", async () => {
     config = settings({ NANOGENT_ENV: "production" });
     expect(
-      (await submit(request("/api/runs", { ...input, model: "claude-opus-5-5" }))).status,
+      (await submit(request("/api/runs", { ...input, model: "claude-sonnet-5-5" }))).status,
     ).toBe(202);
+    expect(
+      (await submit(request("/api/runs", { ...input, model: "claude-opus-5-5" }))).status,
+    ).toBe(400);
+    expect(
+      (await submit(request("/api/runs", { ...input, model: "claude-haiku-5-5" }))).status,
+    ).toBe(400);
     expect((await submit(request("/api/runs", { ...input, maxCostUsd: 1.01 }))).status).toBe(400);
   });
   it("rejects malformed JSON, wrong content type, and oversized bodies", async () => {

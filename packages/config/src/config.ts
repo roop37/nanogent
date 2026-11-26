@@ -2,7 +2,7 @@ import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { EffortSchema } from "@nanogent/core";
 import { z } from "zod";
-import { ModelSchema } from "./pricing.js";
+import { DEFAULT_MODEL, ModelSchema, PRODUCTION_MODEL } from "./pricing.js";
 
 export const ConfigSchema = z.strictObject({
   apiKey: z.string().trim().min(1).optional(),
@@ -23,7 +23,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     environment: env.NANOGENT_ENV ?? "development",
     refusalFallback: fallback.data === undefined ? production : fallback.data === "on",
     apiKey: env.NANOGENT_ANTHROPIC_API_KEY,
-    model: env.NANOGENT_MODEL ?? (production ? "claude-opus-5-5" : "claude-haiku-5-5"),
+    model: env.NANOGENT_MODEL ?? (production ? PRODUCTION_MODEL : DEFAULT_MODEL),
     effort: env.NANOGENT_EFFORT ?? (production ? "high" : "medium"),
     home: env.NANOGENT_HOME,
   });
