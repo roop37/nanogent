@@ -8,4 +8,5 @@ pnpm biome check .
 pnpm -r typecheck
 pnpm -r test
 pnpm test:docker
+pnpm --filter @nanogent/web test:smoke
 echo 'CHECK OK'

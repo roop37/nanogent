@@ -1,0 +1,5 @@
+import { api } from "@/lib/server/runtime";
+export const runtime = "nodejs";
+export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
+  return api("get", request, (await context.params).id);
+}

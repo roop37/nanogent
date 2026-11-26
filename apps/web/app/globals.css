@@ -1,0 +1,60 @@
+@import "tailwindcss";
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: white;
+  --color-card: white;
+  --color-card-foreground: var(--foreground);
+  --color-muted: #f1f5f9;
+  --color-muted-foreground: #526176;
+  --color-border: #dce3ed;
+  --color-input: #cbd5e1;
+  --color-ring: #4f46e5;
+  --color-accent: #eef2ff;
+  --color-accent-foreground: #312e81;
+  --color-secondary: #eef2ff;
+  --color-secondary-foreground: #3730a3;
+  --color-destructive: #b91c1c;
+  --color-destructive-foreground: white;
+}
+:root {
+  --background: #f8fafc;
+  --foreground: #172033;
+  --primary: #4338ca;
+}
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 16px;
+}
+button,
+summary,
+select {
+  cursor: pointer;
+}
+a,
+button,
+input,
+textarea,
+select,
+summary {
+  outline-offset: 4px;
+}
+pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+}
+::selection {
+  background: #c7d2fe;
+}
+
+.model-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23526176' stroke-width='1.5'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+}
