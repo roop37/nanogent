@@ -1,0 +1,272 @@
+import {
+  assertTransition,
+  type RunEvent,
+  type RunEventInput,
+  RunEventSchema,
+  RunIdSchema,
+  type RunRecord,
+  type RunResult,
+  RunResultSchema,
+  type RunSpec,
+  RunSpecSchema,
+  type RunState,
+  RunStateSchema,
+  type RunStore,
+  redact,
+} from "@nanogent/core";
+import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
+import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
+import * as schema from "./schema.js";
+
+export type RunDatabase = PgDatabase<PgQueryResultHKT, typeof schema>;
+type Transaction = Parameters<Parameters<RunDatabase["transaction"]>[0]>[0];
+export interface StoredRun extends RunRecord {
+  ownerId: string | null;
+  triggerRunId: string | null;
+  cancelRequested: boolean;
+}
+const terminal = (state: RunState) => ["completed", "failed", "canceled"].includes(state);
+
+export class PostgresRunStore implements RunStore {
+  constructor(
+    readonly db: RunDatabase,
+    private readonly secrets: readonly string[] = [],
+  ) {}
+
+  async withExecutionLock<T>(runId: string, work: () => Promise<T>): Promise<T | undefined> {
+    RunIdSchema.parse(runId);
+    return this.db.transaction(async (tx) => {
+      const lock = sql<boolean>`pg_try_advisory_xact_lock(hashtextextended(${runId}, 0))`;
+      const [row] = await tx
+        .select({ acquired: lock })
+        .from(schema.runs)
+        .where(eq(schema.runs.id, runId));
+      if (!row) throw new Error("Run not found");
+      if (!row.acquired) return undefined;
+      return work();
+    });
+  }
+  private clean(value: unknown): unknown {
+    if (typeof value === "string") {
+      for (const secret of this.secrets)
+        if (secret) value = (value as string).replaceAll(secret, "[REDACTED]");
+      return redact(value as string);
+    }
+    if (Array.isArray(value)) return value.map((item) => this.clean(item));
+    if (value !== null && typeof value === "object")
+      return Object.fromEntries(
+        Object.entries(value).map(([key, item]) => [key, this.clean(item)]),
+      );
+    return value;
+  }
+  async create(spec: RunSpec, options: { ownerId?: string } = {}): Promise<void> {
+    const valid = RunSpecSchema.parse(this.clean(RunSpecSchema.parse(spec)));
+    await this.db
+      .insert(schema.runs)
+      .values({ id: valid.id, spec: valid, ownerId: options.ownerId ?? null });
+  }
+  private async locked(tx: Transaction, runId: string) {
+    const [row] = await tx
+      .select()
+      .from(schema.runs)
+      .where(eq(schema.runs.id, RunIdSchema.parse(runId)))
+      .for("update");
+    if (!row) throw new Error("Run not found");
+    return row;
+  }
+  private async lastSeq(tx: Transaction, runId: string) {
+    const [last] = await tx
+      .select({ seq: schema.runEvents.seq })
+      .from(schema.runEvents)
+      .where(eq(schema.runEvents.runId, runId))
+      .orderBy(desc(schema.runEvents.seq))
+      .limit(1);
+    return last?.seq ?? 0;
+  }
+  private async insert(tx: Transaction, row: typeof schema.runs.$inferSelect, input: RunEvent) {
+    const event = RunEventSchema.parse(this.clean(RunEventSchema.parse(input)));
+    const last = await this.lastSeq(tx, row.id);
+    if (event.seq !== last + 1)
+      throw new Error("Event sequence must be contiguous; duplicate or out-of-order seq");
+    if (terminal(row.state)) throw new Error("Run is terminal");
+    if (event.type === "run.state_changed") {
+      if (row.state !== event.data.from) throw new Error("Stale state transition");
+      assertTransition(row.state, event.data.to);
+      await tx.update(schema.runs).set({ state: event.data.to }).where(eq(schema.runs.id, row.id));
+    }
+    if (event.type === "run.result") {
+      if (row.result) throw new Error("Run already has a result");
+      await tx.update(schema.runs).set({ result: event.data }).where(eq(schema.runs.id, row.id));
+    }
+    await tx.insert(schema.runEvents).values(event);
+    await tx.update(schema.runs).set({ updatedAt: new Date() }).where(eq(schema.runs.id, row.id));
+  }
+  async append(event: RunEvent): Promise<void> {
+    RunEventSchema.parse(event);
+    await this.db.transaction(async (tx) =>
+      this.insert(tx, await this.locked(tx, event.runId), event),
+    );
+  }
+  async emit(runId: string, input: RunEventInput): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      const row = await this.locked(tx, runId);
+      await this.insert(
+        tx,
+        row,
+        RunEventSchema.parse({
+          ...input,
+          runId,
+          seq: (await this.lastSeq(tx, runId)) + 1,
+          ts: new Date().toISOString(),
+        }),
+      );
+    });
+  }
+  async setState(runId: string, state: RunState): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      const row = await this.locked(tx, runId);
+      assertTransition(row.state, state);
+      await this.insert(
+        tx,
+        row,
+        RunEventSchema.parse({
+          runId,
+          seq: (await this.lastSeq(tx, runId)) + 1,
+          ts: new Date().toISOString(),
+          type: "run.state_changed",
+          data: { from: row.state, to: state },
+        }),
+      );
+    });
+  }
+  async finish(runId: string, result: RunResult): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      const row = await this.locked(tx, runId);
+      assertTransition(row.state, result.status);
+      const seq = (await this.lastSeq(tx, runId)) + 1;
+      const ts = new Date().toISOString();
+      await this.insert(
+        tx,
+        row,
+        RunEventSchema.parse({ runId, seq, ts, type: "run.result", data: result }),
+      );
+      await this.insert(
+        tx,
+        row,
+        RunEventSchema.parse({
+          runId,
+          seq: seq + 1,
+          ts,
+          type: "run.state_changed",
+          data: { from: row.state, to: result.status },
+        }),
+      );
+    });
+  }
+  async get(runId: string): Promise<StoredRun | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(schema.runs)
+      .where(eq(schema.runs.id, RunIdSchema.parse(runId)));
+    return row ? this.record(row) : undefined;
+  }
+  private record(row: typeof schema.runs.$inferSelect): StoredRun {
+    return {
+      spec: RunSpecSchema.parse(row.spec),
+      state: RunStateSchema.parse(row.state),
+      ...(row.result ? { result: RunResultSchema.parse(row.result) } : {}),
+      ownerId: row.ownerId,
+      triggerRunId: row.triggerRunId,
+      cancelRequested: row.cancelRequested,
+    };
+  }
+  async *events(runId: string, fromSeq = 1): AsyncIterable<RunEvent> {
+    RunIdSchema.parse(runId);
+    if (!Number.isSafeInteger(fromSeq) || fromSeq < 1) throw new Error("Invalid event cursor");
+    const [last] = await this.db
+      .select({ seq: schema.runEvents.seq })
+      .from(schema.runEvents)
+      .where(eq(schema.runEvents.runId, runId))
+      .orderBy(desc(schema.runEvents.seq))
+      .limit(1);
+    const end = last?.seq ?? 0;
+    let cursor = fromSeq;
+    while (true) {
+      const page = await this.db
+        .select()
+        .from(schema.runEvents)
+        .where(
+          and(
+            eq(schema.runEvents.runId, runId),
+            gte(schema.runEvents.seq, cursor),
+            lte(schema.runEvents.seq, end),
+          ),
+        )
+        .orderBy(schema.runEvents.seq)
+        .limit(100);
+      for (const row of page) {
+        const event = RunEventSchema.parse({ ...row, ts: new Date(row.ts).toISOString() });
+        yield event;
+        cursor = event.seq + 1;
+      }
+      if (page.length < 100) return;
+    }
+  }
+  async list(options: { ownerId?: string; limit?: number } = {}): Promise<StoredRun[]> {
+    const limit = options.limit ?? 100;
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1000)
+      throw new Error("Invalid list limit");
+    const rows = await this.db
+      .select()
+      .from(schema.runs)
+      .where(options.ownerId === undefined ? undefined : eq(schema.runs.ownerId, options.ownerId))
+      .orderBy(desc(schema.runs.createdAt), desc(schema.runs.id))
+      .limit(limit);
+    return rows.map((row) => this.record(row));
+  }
+  async bindTrigger(runId: string, triggerRunId: string): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      const row = await this.locked(tx, runId);
+      if (row.triggerRunId && row.triggerRunId !== triggerRunId)
+        throw new Error("Run already enqueued");
+      await tx
+        .update(schema.runs)
+        .set({ triggerRunId, updatedAt: new Date() })
+        .where(eq(schema.runs.id, runId));
+    });
+  }
+  async requestCancel(runId: string): Promise<StoredRun> {
+    await this.db.transaction(async (tx) => {
+      const row = await this.locked(tx, runId);
+      if (terminal(row.state) || row.cancelRequested) return;
+      await tx.update(schema.runs).set({ cancelRequested: true }).where(eq(schema.runs.id, runId));
+      await this.insert(
+        tx,
+        row,
+        RunEventSchema.parse({
+          runId,
+          seq: (await this.lastSeq(tx, runId)) + 1,
+          ts: new Date().toISOString(),
+          type: "log",
+          data: { level: "info", message: "Cancellation requested" },
+        }),
+      );
+      if (row.state === "queued") {
+        await this.insert(
+          tx,
+          row,
+          RunEventSchema.parse({
+            runId,
+            seq: (await this.lastSeq(tx, runId)) + 1,
+            ts: new Date().toISOString(),
+            type: "run.state_changed",
+            data: { from: "queued", to: "canceled" },
+          }),
+        );
+      }
+    });
+    const record = await this.get(runId);
+    if (!record) throw new Error("Run not found");
+    return record;
+  }
+}

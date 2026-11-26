@@ -161,3 +161,7 @@ export class JsonlRunStore implements RunStore {
     return records;
   }
 }
+
+export { connectPostgres } from "./pg/client.js";
+export * as postgresSchema from "./pg/schema.js";
+export { PostgresRunStore, type StoredRun } from "./pg/store.js";

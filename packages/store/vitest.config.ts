@@ -24,5 +24,9 @@ export default defineConfig({
       ),
     },
   },
-  test: { exclude: ["**/node_modules/**", "**/dist/**", "**/*.docker.test.ts"] },
+  test: {
+    testTimeout: 30_000,
+    hookTimeout: 120_000,
+    exclude: ["**/node_modules/**", "**/dist/**", "**/*.docker.test.ts"],
+  },
 });
