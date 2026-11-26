@@ -10,7 +10,6 @@ coverage/
 .env.*
 .DS_Store
 
-.trigger/
 
 .next/
 *.tsbuildinfo

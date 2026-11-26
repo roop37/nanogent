@@ -1,42 +1,59 @@
-# Hosted worker
+# Runner
 
-The exported `execute-run` task accepts `{ runId }`. Its plain function, `executeStoredRun`, is tested against Docker
-Postgres with a fake brain and sandbox. The task itself uses Claude, Daytona and Postgres only when a human starts it.
+A long-running process that executes hosted runs. It reads `queued` runs from Postgres, runs each in a Docker sandbox
+on the same host (or in Daytona), and writes events and the result back. It only makes outbound connections, apart
+from one small HTTP endpoint the web app uses to wake it up.
 
-Configure these variables in the worker process or Trigger environment. Do not create an `.env` file in the repository.
+## Configuration
 
-| Variable | Purpose |
-| --- | --- |
-| `NANOGENT_DATABASE_URL` | Postgres connection URL; Neon SSL modes use verified certificates |
-| `NANOGENT_ANTHROPIC_API_KEY` | Claude model client, never sent to the sandbox |
-| `DAYTONA_API_KEY` | Daytona control client, never sent to the sandbox |
-| `NANOGENT_ENV` | `development`, `test` or `production`; production requires network blocking |
-| `TRIGGER_PROJECT_REF` | Optional project override; defaults to `proj_dnaruiydwcvmfbbyntay` |
-| `TRIGGER_SECRET_KEY` | Needed by the application calling `RemoteController`; configure for its Trigger environment |
+Set these in the process environment (for example a systemd `EnvironmentFile` readable only by the service user). Do
+not put them in the repository.
 
-The Trigger CLI uses the human's existing login for development and deployment. No credential discovery happens in
-this code. The task queue allows ten concurrent runs, with one attempt per task and at most two transient setup retries.
-The database pool has room for ten execution locks and their event writes. Database availability is required throughout
-execution, including cancellation monitoring.
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `NANOGENT_DATABASE_URL` | Postgres connection URL | required |
+| `NANOGENT_ANTHROPIC_API_KEY` | Claude API key; never passed to a sandbox | required |
+| `NANOGENT_WAKE_SECRET` | Shared with the web app; at least 32 characters | required |
+| `NANOGENT_ENV` | `development`, `test` or `production` | `development` |
+| `NANOGENT_SANDBOX` | `docker` or `daytona` | `docker` |
+| `DAYTONA_API_KEY` | Only for `NANOGENT_SANDBOX=daytona` | |
+| `NANOGENT_CONCURRENCY` | Runs at the same time | `2` |
+| `NANOGENT_RUNNER_PORT` | Port for `POST /wake` and `GET /healthz` | `8787` |
+| `NANOGENT_SWEEP_SEC` | Idle look-up interval | `900` |
+| `NANOGENT_DRAIN_SEC` | Time given to running runs on shutdown | `300` |
 
-From the repository root, with the database URL already provided by the environment:
+The model for each run comes from the run itself; the web app sets it from `NANOGENT_ENV`.
+
+## Running
 
 ```sh
-pnpm install
-pnpm db:migrate
+pnpm install --frozen-lockfile
+pnpm db:migrate          # once per database
 pnpm build
-cd apps/worker
-npx trigger.dev@latest dev
+pnpm sandbox:build       # builds the sandbox image
+node apps/worker/dist/main.js
 ```
 
-For deployment, a human runs `npx trigger.dev@latest deploy` from `apps/worker`. The build extension packages the system
-prompt and Python sandbox helpers. Task imports use `@trigger.dev/sdk`; the build extension uses `@trigger.dev/build`.
-No scheduler, UI or private repository access is configured here.
+A systemd unit, with the service user and Docker set up as described in [security](../../docs/security.md), looks like:
 
-The API caller must check ownership before calling `RemoteController`. It creates the row, triggers the task with the
-run ID as its idempotency key, and persists the returned handle. If triggering fails ambiguously, call `enqueue(runId)`
-to retry the same ID. Cancellation first sets a durable flag, then cancels the Trigger handle. Workers also poll the
-flag, so an interrupted cancellation request can still stop active work.
+```ini
+[Service]
+User=nanogent
+WorkingDirectory=/opt/nanogent/repos/nanogent
+EnvironmentFile=/etc/nanogent/runner.env
+ExecStart=/usr/bin/node apps/worker/dist/main.js
+Restart=always
+TimeoutStopSec=330
+```
 
-Production fails closed when the Daytona tier cannot block egress. Development permits the documented essential-services
-fallback with a warning event. See [security](../../docs/security.md) before choosing the runtime environment.
+## Waking the runner
+
+After saving a run the web app posts `{ "runId": "..." }` to `NANOGENT_RUNNER_URL` with an `x-nanogent-signature`
+header (`t=<unix seconds>,v1=<hmac-sha256 of "<t>.<body>">`). Wrong, missing or older-than-a-minute signatures get a
+401. Open the port in the host's firewall; nothing else needs to be reachable. If the wake-up is lost, the run starts
+on the next sweep.
+
+## Tests
+
+`pnpm --filter @nanogent/worker test` runs the loop and the wake-up endpoint against fakes, and the stored-run
+executor against a disposable Postgres when Docker is available.
