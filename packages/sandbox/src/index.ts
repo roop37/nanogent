@@ -344,3 +344,11 @@ export class DockerSandbox implements Sandbox {
       throw new Error("Volume cleanup failed");
   }
 }
+
+export {
+  type DaytonaClient,
+  type DaytonaHandle,
+  DaytonaSandbox,
+  DaytonaSandboxProvider,
+  isTransientDaytonaError,
+} from "./daytona.js";

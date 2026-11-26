@@ -16,6 +16,7 @@
     "lint": "biome check ."
   },
   "dependencies": {
-    "@nanogent/core": "workspace:*"
+    "@nanogent/core": "workspace:*",
+    "@daytonaio/sdk": "0.232.0"
   }
 }
