@@ -21,7 +21,6 @@ export const runs = pgTable(
     result: jsonb("result").$type<RunResult>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-    triggerRunId: text("trigger_run_id"),
     cancelRequested: boolean("cancel_requested").notNull().default(false),
   },
   (table) => [index("runs_owner_created_idx").on(table.ownerId, table.createdAt)],

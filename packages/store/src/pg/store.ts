@@ -14,7 +14,7 @@ import {
   type RunStore,
   redact,
 } from "@nanogent/core";
-import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import * as schema from "./schema.js";
 
@@ -22,7 +22,6 @@ export type RunDatabase = PgDatabase<PgQueryResultHKT, typeof schema>;
 type Transaction = Parameters<Parameters<RunDatabase["transaction"]>[0]>[0];
 export interface StoredRun extends RunRecord {
   ownerId: string | null;
-  triggerRunId: string | null;
   cancelRequested: boolean;
 }
 const terminal = (state: RunState) => ["completed", "failed", "canceled"].includes(state);
@@ -176,7 +175,6 @@ export class PostgresRunStore implements RunStore {
       state: RunStateSchema.parse(row.state),
       ...(row.result ? { result: RunResultSchema.parse(row.result) } : {}),
       ownerId: row.ownerId,
-      triggerRunId: row.triggerRunId,
       cancelRequested: row.cancelRequested,
     };
   }
@@ -224,16 +222,16 @@ export class PostgresRunStore implements RunStore {
       .limit(limit);
     return rows.map((row) => this.record(row));
   }
-  async bindTrigger(runId: string, triggerRunId: string): Promise<void> {
-    await this.db.transaction(async (tx) => {
-      const row = await this.locked(tx, runId);
-      if (row.triggerRunId && row.triggerRunId !== triggerRunId)
-        throw new Error("Run already enqueued");
-      await tx
-        .update(schema.runs)
-        .set({ triggerRunId, updatedAt: new Date() })
-        .where(eq(schema.runs.id, runId));
-    });
+  /** Ids of runs a runner should look at: queued ones, and active ones in case their worker died. */
+  async listRunnable(limit = 20): Promise<{ id: string; state: RunState }[]> {
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200) throw new Error("Invalid limit");
+    const rows = await this.db
+      .select({ id: schema.runs.id, state: schema.runs.state })
+      .from(schema.runs)
+      .where(inArray(schema.runs.state, ["queued", "running", "awaiting_approval"]))
+      .orderBy(schema.runs.createdAt, schema.runs.id)
+      .limit(limit);
+    return rows.map((row) => ({ id: row.id, state: RunStateSchema.parse(row.state) }));
   }
   async requestCancel(runId: string): Promise<StoredRun> {
     await this.db.transaction(async (tx) => {

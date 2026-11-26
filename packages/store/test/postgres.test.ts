@@ -58,6 +58,20 @@ describe.skipIf(!dockerAvailable)("Postgres store", () => {
       expect(raw).not.toContain(secret);
     expect(await restarted.get(runtime().spec.id)).toBeUndefined();
   });
+  it("lists queued and active runs oldest first for runners, and not finished ones", async () => {
+    const queued = runtime().spec;
+    const running = runtime().spec;
+    const done = runtime().spec;
+    for (const spec of [queued, running, done]) await pg.store.create(spec);
+    await pg.store.setState(running.id, "running");
+    await pg.store.setState(done.id, "canceled");
+    const ids = (await pg.store.listRunnable(200)).map((row) => row.id);
+    expect(ids).toContain(queued.id);
+    expect(ids).toContain(running.id);
+    expect(ids).not.toContain(done.id);
+    expect(ids.indexOf(queued.id)).toBeLessThan(ids.indexOf(running.id));
+    await expect(pg.store.listRunnable(0)).rejects.toThrow("Invalid limit");
+  });
   it("rejects duplicates, gaps, stale states, illegal transitions and terminal writes", async () => {
     const { spec } = runtime();
     await pg.store.create(spec);
