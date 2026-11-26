@@ -112,8 +112,8 @@ export function LiveRun({
       </div>
       {dispatchPending && run.state === "queued" && (
         <output className="mb-4 block rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          Run saved; dispatch could not be confirmed. An operator can retry dispatch for this run.
-          Its budget remains reserved.
+          Run saved, but its start could not be confirmed. It begins when the runner picks it up, or
+          you can cancel it. Its budget remains reserved.
         </output>
       )}
       {(error || cancelError) && (

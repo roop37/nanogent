@@ -234,7 +234,7 @@ describe("run route handlers", () => {
     charged = 0.2;
     expect((await submit(request("/api/runs", input))).status).toBe(429);
   });
-  it("keeps the saved ID and reservation when dispatch is uncertain", async () => {
+  it("keeps the saved ID and reservation when the start is uncertain", async () => {
     backend.submit = vi.fn(async (spec) => {
       addRun(spec.id);
       throw new Error("private service details");
@@ -243,7 +243,7 @@ describe("run route handlers", () => {
     expect(response.status).toBe(202);
     const data = await response.json();
     expect(data.id).toBeTruthy();
-    expect(data.warning).toContain("dispatch");
+    expect(data.warning).toContain("saved");
     expect(JSON.stringify(data)).not.toContain("private service details");
   });
   it("hides infrastructure errors", async () => {

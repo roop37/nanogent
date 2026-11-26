@@ -1,79 +1,68 @@
-import type { StoredRun } from "@nanogent/store";
+import { verifyWake, WAKE_HEADER } from "@nanogent/core";
 import { expect, it, vi } from "vitest";
 import { runtime } from "../../core/test/runtime.js";
-import { RemoteController } from "../src/remote.js";
+import { httpRunnerNotifier, RemoteController } from "../src/remote.js";
 
 function setup() {
   const { spec } = runtime();
-  const record: StoredRun = {
-    spec,
-    state: "queued",
-    ownerId: null,
-    triggerRunId: null,
-    cancelRequested: false,
-  };
   const store = {
     create: vi.fn(async () => {}),
-    get: vi.fn(async () => record),
     emit: vi.fn(async () => {}),
-    bindTrigger: vi.fn(async (_id: string, handle: string) => {
-      record.triggerRunId = handle;
-    }),
-    requestCancel: vi.fn(async () => {
-      record.cancelRequested = true;
-      return record;
-    }),
+    requestCancel: vi.fn(async () => ({})),
   };
-  const sdk = { trigger: vi.fn(async () => ({ id: "trigger_1" })), cancel: vi.fn(async () => {}) };
-  return { spec, record, store, sdk, controller: new RemoteController(store, sdk) };
+  // biome-ignore lint/suspicious/noExplicitAny: the controller only uses these three store methods
+  return { spec, store, controller: new RemoteController(store as any) };
 }
-it("stores the run before triggering with its idempotency key", async () => {
-  const { controller, spec, store, sdk } = setup();
+
+it("saves the run and its creation event, and returns the id", async () => {
+  const { controller, spec, store } = setup();
   const ownerId = crypto.randomUUID();
   expect(await controller.submit(spec, { ownerId })).toBe(spec.id);
   expect(store.create).toHaveBeenCalledWith(spec, { ownerId });
-  expect(sdk.trigger).toHaveBeenCalledWith(
-    "execute-run",
-    { runId: spec.id },
-    { idempotencyKey: spec.id },
-  );
-  expect(store.bindTrigger).toHaveBeenCalledWith(spec.id, "trigger_1");
+  expect(store.emit).toHaveBeenCalledWith(spec.id, { type: "run.created", data: { spec } });
   expect(store.create.mock.invocationCallOrder[0]).toBeLessThan(
-    sdk.trigger.mock.invocationCallOrder[0] ?? 0,
+    store.emit.mock.invocationCallOrder[0] ?? 0,
   );
 });
-it("persists cancellation before canceling Trigger and retries the same handle", async () => {
-  const { controller, spec, sdk, store } = setup();
-  await controller.submit(spec);
-  sdk.cancel.mockRejectedValueOnce(new Error("transport"));
-  await expect(controller.cancel(spec.id)).rejects.toThrow("transport");
+
+it("rejects an invalid spec before touching the store", async () => {
+  const { controller, spec, store } = setup();
+  await expect(controller.submit({ ...spec, task: "" })).rejects.toThrow();
+  expect(store.create).not.toHaveBeenCalled();
+});
+
+it("cancel records the request in the store", async () => {
+  const { controller, spec, store } = setup();
   await controller.cancel(spec.id);
-  expect(sdk.cancel).toHaveBeenCalledTimes(2);
-  expect(sdk.cancel).toHaveBeenLastCalledWith("trigger_1");
-  expect(store.requestCancel.mock.invocationCallOrder[0]).toBeLessThan(
-    sdk.cancel.mock.invocationCallOrder[0] ?? 0,
+  expect(store.requestCancel).toHaveBeenCalledWith(spec.id);
+});
+
+it("nudges the runner after the run is saved, and a failed nudge doesn't fail the submit", async () => {
+  const { spec, store } = setup();
+  const wake = vi.fn(async () => {
+    throw new Error("runner down");
+  });
+  // biome-ignore lint/suspicious/noExplicitAny: partial store
+  const controller = new RemoteController(store as any, { wake });
+  expect(await controller.submit(spec)).toBe(spec.id);
+  expect(wake).toHaveBeenCalledWith(spec.id);
+  expect(store.emit.mock.invocationCallOrder[0]).toBeLessThan(
+    wake.mock.invocationCallOrder[0] ?? 0,
   );
 });
-it("can re-enqueue after an ambiguous trigger error using the same key", async () => {
-  const { controller, spec, store, sdk } = setup();
-  sdk.trigger.mockRejectedValueOnce(new Error("transport"));
-  await expect(controller.submit(spec)).rejects.toThrow("transport");
-  await controller.enqueue(spec.id);
-  expect(store.create).toHaveBeenCalledTimes(1);
-  expect(sdk.trigger.mock.calls[0]).toEqual(sdk.trigger.mock.calls[1]);
-});
-it("cancels a handle returned after cancellation was requested", async () => {
-  const { controller, spec, sdk, record } = setup();
-  sdk.trigger.mockImplementationOnce(async () => {
-    record.cancelRequested = true;
-    return { id: "trigger_1" };
+
+it("the HTTP notifier posts a signed body to the runner", async () => {
+  const fetchMock = vi.fn(async () => new Response(null, { status: 202 }));
+  const notifier = httpRunnerNotifier({
+    url: "http://runner.example:8787/wake",
+    secret: "k".repeat(32),
+    fetch: fetchMock as unknown as typeof fetch,
   });
-  await controller.submit(spec);
-  expect(sdk.cancel).toHaveBeenCalledWith("trigger_1");
-});
-it("does not enqueue terminal runs", async () => {
-  const { controller, spec, sdk, record } = setup();
-  record.state = "completed";
-  await controller.enqueue(spec.id);
-  expect(sdk.trigger).not.toHaveBeenCalled();
+  await notifier.wake("run_abc");
+  const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+  expect(url).toBe("http://runner.example:8787/wake");
+  expect(init.method).toBe("POST");
+  expect(init.body).toBe('{"runId":"run_abc"}');
+  const signature = (init.headers as Record<string, string>)[WAKE_HEADER];
+  expect(verifyWake("k".repeat(32), signature, init.body as string)).toBe(true);
 });

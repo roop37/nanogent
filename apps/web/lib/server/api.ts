@@ -124,7 +124,7 @@ export function createApi(deps: ApiDependencies) {
                 return {
                   id: submitted.id,
                   warning:
-                    "Run saved; dispatch could not be confirmed. An operator can retry dispatch.",
+                    "Run saved, but its start could not be confirmed. It begins when the runner picks it up.",
                 };
               throw new HttpError(503, "Could not submit the run. Try again.");
             }

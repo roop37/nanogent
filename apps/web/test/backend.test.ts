@@ -1,6 +1,6 @@
 import { createRunId, DEFAULT_LIMITS, RunSpecSchema } from "@nanogent/core";
 import { connectPostgres } from "@nanogent/store";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { dockerAvailable, startPostgres } from "../../../packages/store/test/postgres";
 import { createApi } from "../lib/server/api";
 import { createBackend } from "../lib/server/backend";
@@ -16,10 +16,6 @@ function spec(cost = 0.1) {
     limits: { ...DEFAULT_LIMITS, maxCostUsd: cost },
   });
 }
-const sdk = {
-  trigger: vi.fn(async () => ({ id: `task-${crypto.randomUUID()}` })),
-  cancel: vi.fn(async () => {}),
-};
 describe.skipIf(!dockerAvailable)("web Postgres admission", () => {
   let pg: Awaited<ReturnType<typeof startPostgres>>;
   beforeAll(async () => {
@@ -28,10 +24,10 @@ describe.skipIf(!dockerAvailable)("web Postgres admission", () => {
   afterAll(async () => {
     await pg?.stop();
   });
-  it("reads owner-scoped live metrics and never exposes the Trigger handle", async () => {
+  it("reads owner-scoped live metrics", async () => {
     const owner = crypto.randomUUID();
     const run = spec();
-    const backend = createBackend(pg.db, sdk);
+    const backend = createBackend(pg.db);
     await backend.submit(run, owner);
     await pg.store.setState(run.id, "running");
     await pg.store.emit(run.id, {
@@ -51,13 +47,12 @@ describe.skipIf(!dockerAvailable)("web Postgres admission", () => {
     const view = await backend.get(owner, run.id);
     expect(view?.progress).toEqual({ turns: 1, toolCalls: 1, costUsd: 0.02 });
     expect(view).not.toHaveProperty("ownerId");
-    expect(view).not.toHaveProperty("triggerRunId");
     expect((await backend.list(owner))[0]?.spec.id).toBe(run.id);
     expect(await backend.allowance(owner)).toEqual({ activeCount: 1, charged: 0.1 });
   });
   it("counts terminal event cost without a result and keeps old active budgets reserved", async () => {
     const owner = crypto.randomUUID();
-    const backend = createBackend(pg.db, sdk);
+    const backend = createBackend(pg.db);
     const pending = spec(0.4);
     await backend.submit(pending, owner);
     await pg.pool.query(
@@ -84,7 +79,7 @@ describe.skipIf(!dockerAvailable)("web Postgres admission", () => {
   });
   it("checks more than the latest 100 displayed rows", async () => {
     const owner = crypto.randomUUID();
-    const backend = createBackend(pg.db, sdk);
+    const backend = createBackend(pg.db);
     for (let i = 0; i < 101; i++) {
       const run = spec(0.01);
       await pg.store.create(run, { ownerId: owner });
@@ -96,7 +91,7 @@ describe.skipIf(!dockerAvailable)("web Postgres admission", () => {
     const owner = crypto.randomUUID();
     const other = connectPostgres(pg.url);
     try {
-      const backends = [createBackend(pg.db, sdk), createBackend(other.db, sdk)];
+      const backends = [createBackend(pg.db), createBackend(other.db)];
       const responses = await Promise.all(
         backends.map((backend) =>
           createApi({

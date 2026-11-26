@@ -22,11 +22,7 @@
   "dependencies": {
     "@nanogent/core": "workspace:*",
     "@nanogent/harness": "workspace:*",
-    "@trigger.dev/sdk": "4.8.10",
     "@nanogent/store": "workspace:*",
     "zod": "4.3.6"
-  },
-  "devDependencies": {
-    "@nanogent/worker": "workspace:*"
   }
 }

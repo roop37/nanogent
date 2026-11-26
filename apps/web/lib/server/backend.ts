@@ -1,5 +1,9 @@
 import "server-only";
-import { RemoteController, type RemoteTasks } from "@nanogent/controller/remote";
+import {
+  httpRunnerNotifier,
+  RemoteController,
+  type RunnerNotifier,
+} from "@nanogent/controller/remote";
 import { PostgresRunStore, postgresSchema as schema } from "@nanogent/store";
 import { neonConfig, Pool } from "@neondatabase/serverless";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -10,9 +14,9 @@ import type { Backend } from "./api";
 import { eventPage } from "./event-page";
 
 neonConfig.webSocketConstructor = ws;
-export function createBackend(db: PostgresRunStore["db"], sdk?: RemoteTasks): Backend {
+export function createBackend(db: PostgresRunStore["db"], notifier?: RunnerNotifier): Backend {
   const store = new PostgresRunStore(db);
-  const controller = new RemoteController(store, sdk);
+  const controller = new RemoteController(store, notifier);
   async function views(
     owner: string,
     records: Awaited<ReturnType<typeof store.list>>,
@@ -116,8 +120,15 @@ export async function withProductionBackend<T>(work: (backend: Backend) => Promi
     query_timeout: 15000,
   });
   try {
-    return await work(createBackend(drizzle(pool, { schema })));
+    return await work(createBackend(drizzle(pool, { schema }), runnerNotifier()));
   } finally {
     await pool.end();
   }
+}
+
+// Optional: without these the runner still finds new runs on its next sweep, just later.
+function runnerNotifier(): RunnerNotifier | undefined {
+  const url = process.env.NANOGENT_RUNNER_URL;
+  const secret = process.env.NANOGENT_WAKE_SECRET;
+  return url && secret ? httpRunnerNotifier({ url, secret }) : undefined;
 }
