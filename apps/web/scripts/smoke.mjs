@@ -2,6 +2,9 @@ import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { chromium } from "@playwright/test";
 
+const shots = process.argv.includes("--shots");
+const label = shots ? "screenshots" : "smoke";
+
 // Only local test configuration reaches the child process.
 const env = Object.fromEntries(
   Object.entries(process.env).filter(([name]) =>
@@ -20,7 +23,7 @@ const env = Object.fromEntries(
 
 if (!existsSync(chromium.executablePath())) {
   console.log(
-    "SKIP web smoke: Playwright Chromium is not installed. Run pnpm --filter @nanogent/web exec playwright install chromium.",
+    `SKIP web ${label}: Playwright Chromium is not installed. Run pnpm --filter @nanogent/web exec playwright install chromium.`,
   );
   process.exit(0);
 }
@@ -35,11 +38,15 @@ try {
     message.includes("Permission denied")
   ) {
     console.log(
-      "SKIP web smoke: the macOS sandbox denies Chromium's Mach-port registration. Run the smoke test in a browser-capable environment.",
+      `SKIP web ${label}: the macOS sandbox denies Chromium's Mach-port registration. Run this command in a browser-capable environment.`,
     );
     process.exit(0);
   }
   throw error;
 }
-const result = spawnSync("pnpm", ["exec", "playwright", "test"], { stdio: "inherit", env });
+const result = spawnSync(
+  "pnpm",
+  ["exec", "playwright", "test", ...(shots ? ["--config", "playwright.shots.config.ts"] : [])],
+  { stdio: "inherit", env },
+);
 process.exit(result.status ?? 1);

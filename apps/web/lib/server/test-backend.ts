@@ -2,6 +2,7 @@ import "server-only";
 import type { RunEvent, RunEventInput, RunSpec } from "@nanogent/core";
 import { active, type RunView } from "../types";
 import type { Backend } from "./api";
+import { demoRuns } from "./demo-runs";
 import { testMode } from "./settings";
 
 type Entry = { owner: string; run: RunView; events: RunEvent[]; started: number };
@@ -60,7 +61,88 @@ function advance(entry: Entry) {
 }
 export function fakeBackend(): Backend {
   if (!testMode()) throw new Error("Fake backend is disabled");
-  globalState.nanogentWebFake ??= new Map();
+  if (!globalState.nanogentWebFake) {
+    globalState.nanogentWebFake = new Map();
+    for (const run of demoRuns()) {
+      const entry: Entry = {
+        owner: "00000000-0000-4000-8000-000000000001",
+        run,
+        events: [],
+        started: Number.POSITIVE_INFINITY,
+      };
+      const updated = run.updatedAt;
+      const file = run.spec.task.includes("reconnects")
+        ? "src/events.ts"
+        : run.spec.task.includes("migration")
+          ? "migrations/teams.sql"
+          : run.spec.task.includes("metadata")
+            ? "src/repository.ts"
+            : run.spec.task.includes("line endings")
+              ? "src/patch.ts"
+              : run.spec.task.includes("timezone")
+                ? "src/report.ts"
+                : run.spec.task.includes("config")
+                  ? "src/config.ts"
+                  : "src/activity.ts";
+      emit(entry, { type: "run.created", data: { spec: run.spec } });
+      if (run.state !== "queued") {
+        emit(entry, { type: "run.state_changed", data: { from: "queued", to: "running" } });
+        emit(entry, { type: "sandbox.ready", data: { sandboxId: "demo-sandbox" } });
+        emit(entry, {
+          type: "tool.call",
+          data: {
+            toolCallId: "read-1",
+            name: "bash",
+            risk: "exec",
+            input: { command: `cat ${file}` },
+          },
+        });
+        emit(entry, {
+          type: "tool.result",
+          data: {
+            toolCallId: "read-1",
+            output: `Read ${file}. Found the implementation and its regression tests.`,
+            isError: false,
+            truncated: false,
+            durationMs: 42,
+          },
+        });
+        emit(entry, {
+          type: "model.response",
+          data: {
+            messageId: "demo-response",
+            model: run.spec.model,
+            usage: {
+              input: 4820,
+              output: 1240,
+              cacheRead: 3200,
+              cacheWrite: 0,
+              costUsd: run.progress.costUsd,
+            },
+          },
+        });
+      }
+      if (run.state === "awaiting_approval")
+        emit(entry, {
+          type: "approval.requested",
+          data: {
+            approvalId: "demo-approval",
+            toolCallId: "migration",
+            name: "bash",
+            risk: "exec",
+          },
+        });
+      if (run.result?.verify) emit(entry, { type: "verify.result", data: run.result.verify });
+      if (run.result) emit(entry, { type: "run.result", data: run.result });
+      if (run.state !== "queued" && run.state !== "running")
+        emit(entry, { type: "run.state_changed", data: { from: "running", to: run.state } });
+      entry.events.forEach((event, index) => {
+        event.ts = new Date(Date.parse(run.createdAt) + index * 12000).toISOString();
+      });
+      run.updatedAt = updated;
+      globalState.nanogentWebFake.set(run.spec.id, entry);
+    }
+  }
   const entries = globalState.nanogentWebFake;
   return {
     list: async (owner) =>
@@ -70,7 +152,7 @@ export function fakeBackend(): Backend {
           advance(e);
           return e.run;
         })
-        .reverse(),
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     get: async (owner, id) => {
       const e = entries.get(id);
       if (!e || e.owner !== owner) return undefined;
@@ -88,7 +170,12 @@ export function fakeBackend(): Backend {
       activeCount: [...entries.values()].filter((e) => e.owner === owner && active(e.run.state))
         .length,
       charged: [...entries.values()]
-        .filter((e) => e.owner === owner)
+        .filter(
+          (e) =>
+            e.owner === owner &&
+            (active(e.run.state) ||
+              e.run.updatedAt.slice(0, 10) === new Date().toISOString().slice(0, 10)),
+        )
         .reduce(
           (sum, e) =>
             sum +

@@ -1,23 +1,27 @@
 import { expect, test } from "@playwright/test";
 
-test("signed-in submission streams events, survives reload, and shows a verified diff", async ({
-  page,
-  context,
-}) => {
+test.beforeEach(async ({ context }) => {
   await context.route("**/*", (route) => {
     const url = new URL(route.request().url());
     return url.hostname === "127.0.0.1" ? route.continue() : route.abort();
   });
+});
+
+test("signed-in submission streams events, survives reload, and shows a verified diff", async ({
+  page,
+  context,
+}) => {
   await page.goto("/");
   await expect(page).toHaveURL(/\/sign-in$/);
   const anonymous = await context.request.get("/api/runs");
   expect(anonymous.status()).toBe(401);
   await context.addCookies([
-    { name: "nanogent-test-session", value: "signed-in", domain: "127.0.0.1", path: "/" },
+    { name: "nanogent-test-session", value: "empty", domain: "127.0.0.1", path: "/" },
   ]);
   await page.goto("/runs/new");
   await page.getByLabel("Public repository URL").fill("https://github.com/example/calc");
   await page.getByLabel("Task", { exact: true }).fill("Fix the addition function");
+  await page.getByText("Advanced", { exact: false }).click();
   await page.getByLabel("Verify command").fill("npm test");
   await page.getByRole("button", { name: "Start run" }).click();
   await expect(page).toHaveURL(/\/runs\/run_/);
@@ -50,11 +54,13 @@ test("signed-in submission streams events, survives reload, and shows a verified
     true,
   );
   await page.getByRole("link", { name: "All runs" }).click();
-  await expect(page.getByRole("link", { name: "Fix the addition function" })).toBeVisible();
+  await expect(
+    page.getByRole("main").getByRole("link", { name: "Fix the addition function" }),
+  ).toBeVisible();
 });
 test("an active run can be canceled", async ({ page, context }) => {
   await context.addCookies([
-    { name: "nanogent-test-session", value: "signed-in", domain: "127.0.0.1", path: "/" },
+    { name: "nanogent-test-session", value: "empty", domain: "127.0.0.1", path: "/" },
   ]);
   // The fake run finishes after a few seconds; compile the run page first so a cold dev server
   // doesn't use up that window before the cancel button is clicked.
@@ -66,6 +72,6 @@ test("an active run can be canceled", async ({ page, context }) => {
   const { id } = await response.json();
   await page.goto(`/runs/${id}`);
   await page.getByRole("button", { name: "Cancel run", exact: true }).click();
-  await expect(page.getByText("canceled", { exact: true })).toBeVisible();
+  await expect(page.getByRole("main").getByText("canceled", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Cancel run" })).toHaveCount(0);
 });
