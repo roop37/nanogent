@@ -83,7 +83,7 @@ isolation and [worker setup](../apps/worker/README.md) for configuration.
 
 ## Web dashboard
 
-`apps/web` serves the App Router dashboard and owner-scoped run API. Neon Auth's Next.js SDK handles email/password
+`apps/web` serves the App Router dashboard and owner-scoped run API. Neon Auth's Next.js SDK handles email/password, GitHub and Google
 sign-in and the auth proxy. Server pages and run handlers independently validate the session; the UUID user ID is the
 only source of `owner_id`. Reads and cancellations check ownership before using the backend. Unowned and missing IDs
 both return 404. Database and auth modules are marked `server-only`.
@@ -104,4 +104,11 @@ terminal state and exhausted the events. Failed polls retry from the last succes
 usage and final results; Event payloads contain model usage rather than response
 text. The timeline shows those costs and tool input/output, and the final diff is rendered as escaped text.
 
-See [web setup](../apps/web/README.md) and [ADR 0006](decisions/0006-web-and-auth.md) for deployment and quota details.
+The signed-in shell shares one run list across its explorer, overview and command palette. `GET /api/runs` also returns
+owner-scoped allowance data for the status bar. List polling runs every five seconds with active runs, thirty seconds
+otherwise, and stops while hidden. Event polling also pauses while hidden, aborts stale requests, and resumes from the
+last successful cursor. Editor tabs use guarded session storage; the explorer becomes a modal drawer on narrow screens.
+Dark tokens and locally bundled fonts apply to all pages. OAuth providers come from validated server configuration;
+return paths are restricted to same-origin relative paths, and provider secrets remain in Neon.
+
+See [UI decisions](decisions/0007-web-ui.md), [web setup](../apps/web/README.md) and [ADR 0006](decisions/0006-web-and-auth.md) for deployment and quota details.

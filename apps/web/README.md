@@ -1,6 +1,6 @@
 # Web dashboard
 
-Next.js App Router, Neon Auth and Postgres. Sign in with email and password, submit a public repository,
+Next.js App Router, Neon Auth and Postgres. Sign in with GitHub, Google, or email and password, submit a public repository,
 watch events, cancel a run, and review verification and the diff. The browser polls persisted events; reloading a run
 replays them from sequence 1. Authentication endpoints are public so users can sign in; all run endpoints require a
 server-validated session. Every dashboard page checks the session before reading data.
@@ -106,3 +106,59 @@ Nothing here provisions or deploys services automatically.
 SDK references: [Neon Next.js setup](https://neon.com/docs/auth/quick-start/nextjs-api-only),
 [managed Auth environment](https://neon.com/docs/ai/skills/neon-auth/references/managed-auth.md), and
 [Neon serverless driver](https://neon.com/docs/serverless/serverless-driver).
+
+## Workspace
+
+The dark interface uses VS Code Dark Modern colours, Inter for UI text, and JetBrains Mono for code and numbers.
+Fonts are bundled locally. The frame has an activity bar, a 220–420 px resizable run explorer, session editor tabs,
+and a status bar. Below 900 px the explorer becomes a drawer and the tabs become a title switcher.
+
+Use Cmd/Ctrl+K to search commands and runs, Cmd/Ctrl+B to toggle the explorer, and N to open a new run outside a text
+field. Up/down moves through explorer rows; Enter opens a run. Cmd/Ctrl+Enter submits the new-run form.
+Open tabs last for the browser session; denied storage falls back to in-memory tabs.
+
+The shared run list refreshes every five seconds with active runs and every thirty seconds otherwise. Hidden tabs
+abort outstanding polls and stop both list and event polling; returning to the tab refreshes immediately. The status
+bar's connection indicator reports the last run-list request. Its budget includes active reservations, matching the
+server's allowance calculation. History groups use UTC dates.
+
+## Social sign-in
+
+Email/password, GitHub and Google use the installed Neon Auth SDK and the same-origin `/api/auth` proxy. Set
+`NANOGENT_AUTH_PROVIDERS` to a comma-separated list of `github` and `google` (default `google,github`). An empty value
+hides both social options; unsupported values fail configuration validation. Only this provider list reaches the
+browser. Return paths must begin with a single `/`; external URLs, backslashes and control characters are rejected.
+
+Configure the providers on the existing Neon branch:
+
+1. GitHub: create an OAuth App under Settings → Developer settings. Set Homepage URL to
+   `https://nanogent.vercel.app` and Authorization callback URL to `{NEON_AUTH_BASE_URL}/callback/github`.
+   The base URL already ends in `/<db>/auth`, so the callback looks like
+   `https://<endpoint>.neonauth.<region>.aws.neon.tech/<db>/auth/callback/github`.
+2. Google: create an OAuth client of type Web application. Add `{NEON_AUTH_BASE_URL}/callback/google` as an
+   authorized redirect URI. Google's shared Neon credentials work for development; use our own client in production.
+3. Add each client ID and secret to the Neon branch under Auth → Settings → OAuth providers. The CLI alternative is
+   `neon neon-auth oauth-provider add --provider-id github --oauth-client-id ... --oauth-client-secret ...`
+   (use `google` for Google).
+4. Add `https://nanogent.vercel.app` under Auth → Domains, or run
+   `neon neon-auth domain add https://nanogent.vercel.app`.
+
+Client secrets live only in Neon. Never commit them or put them in web environment variables. Providers redirect to
+Neon's callback, then return to `/` or the validated `next` path. Failed redirects return a plain error on sign-in.
+
+## Screenshots
+
+```sh
+pnpm --filter @nanogent/web shots
+```
+
+The command starts its own local test-mode dev server, blocks external browser requests, sets a test session cookie,
+and writes PNGs to the ignored `apps/web/.shots/` directory. It captures sign-in, sign-up, home with runs, home empty,
+new run, a verified run, the command palette and the collapsed explorer at 1440 × 900 and 390 × 844, plus the mobile
+drawer at 390 × 844. Reduced motion keeps captures stable. It uses the same Chromium availability check as smoke tests.
+A missing browser or the known macOS Mach-port denial prints a skip reason; other failures remain fatal.
+
+Test mode seeds eight runs: running, queued, blocked, three verified completions, verification failure and cancellation.
+The `nanogent-test-session=signed-in` cookie selects that account. Use `nanogent-test-session=empty` for a separate
+unseeded account, including submission tests. The seeded account has three active runs; cancel one to submit another.
+The seed and test-session bypass are both disabled outside the restricted local test environment.
