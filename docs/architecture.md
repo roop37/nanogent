@@ -39,22 +39,19 @@ later, the web UI only read events.
 
 ```mermaid
 flowchart LR
-  Caller --> RemoteController
-  RemoteController --> Postgres
-  RemoteController --> Trigger[Trigger.dev execute-run]
-  Trigger --> Executor
-  Executor --> Daytona
+  Web[Web app on Vercel] -->|saves queued run| Postgres
+  Web -. signed wake-up .-> Runner
+  Runner -->|reads queued runs| Postgres
+  Runner --> Executor
+  Executor --> Sandbox[Docker sandbox]
   Executor --> ClaudeBrain
   Executor -- events and result --> Postgres
-  Trigger -- state, turns, cost --> Metadata[Trigger realtime metadata]
 ```
 
-`RemoteController.submit` creates a run and its creation event, then triggers `execute-run` with the run ID as the
-idempotency key. The Trigger run ID and cancellation request are persisted on the run. If enqueueing fails after a
-network timeout, `enqueue(runId)` repeats the same request without creating another row. An authorized caller must
-check ownership before reading, enqueueing or canceling a run; these backend classes do not implement authentication.
+`RemoteController.submit` validates the spec, writes the run and its creation event, and sends the runner a wake-up. The
+saved `queued` row is the queue entry. If the wake-up is lost, the runner finds the row on its next sweep.
 
-`PostgresRunStore` uses Drizzle with a caller-supplied Postgres database. The worker uses node-postgres. A web server can
+`PostgresRunStore` uses Drizzle with a caller-supplied Postgres database. The runner uses node-postgres. A web server can
 supply Drizzle's Neon serverless WebSocket driver, which supports interactive transactions; the HTTP driver does not.
 The `public.runs.owner_id` column is a nullable UUID matching Neon Auth IDs, without a cross-schema foreign key.
 `list({ ownerId, limit })` orders newest first. Event replay uses 100-row pages and a fixed upper sequence bound.
@@ -63,29 +60,33 @@ Each append locks the run row with `SELECT ... FOR UPDATE`, checks the sequence 
 its corresponding row update. The composite event primary key also prevents duplicates. `finish` persists the result
 and terminal transition in one transaction. Specs, event data and results are redacted before storage.
 
+The runner (`apps/worker`) is one long-running process. It keeps up to `NANOGENT_CONCURRENCY` runs going (default 2,
+sized for a 2-core, 12 GB host) and looks for work when woken, every 5 seconds while busy, and every 15 minutes when idle.
+Polling is kept slow on purpose: a constant poll would keep a scale-to-zero database awake. The wake-up endpoint
+(`POST /wake`) checks an HMAC signature over a timestamp and the body, allows a minute of clock skew, caps body size and
+accepts at most five wake-ups a second.
+
 `executeStoredRun` takes a Postgres advisory transaction lock for the duration of execution. A second live delivery
 returns without work. Once a crashed connection releases the lock, a replacement sees the active state and records a
-failure, preserving usage already recorded in events. Terminal runs are unchanged. The worker does not resume a paid
+failure, preserving usage already recorded in events. Terminal runs are unchanged. The runner does not resume a paid
 model loop. Each live run holds one connection for the lock and uses another for short event transactions; the pool
-allows 24 connections and the task queue limits concurrency to 10. Keep those settings aligned when scaling, and do not
-configure an idle-transaction timeout shorter than a run on the lock connection.
+allows 24 connections. Do not configure an idle-transaction timeout shorter than a run on the lock connection.
 
-The task has one attempt. Only classified transient sandbox setup failures (429, 502, 503, 504) get up to two retries,
-before the model starts and after any allocated sandbox is cleaned up. Verification failures and model failures are
-final. Progress metadata contains state, turns and cost; Postgres is authoritative if metadata delivery fails.
+There is one attempt per run. Only classified transient sandbox setup failures (Daytona 429, 502, 503, 504) are retried,
+before the model starts and after any allocated sandbox is cleaned up. Verification failures and model failures are final.
 
-Cancellation is persisted before `runs.cancel`. Queued runs become canceled immediately. Active workers observe the
-flag and Trigger's abort signal; the executor destroys the sandbox in `finally`. The task's `onCancel` hook waits for
-cleanup. Trigger allows a limited cleanup window, so a worker killed during creation or teardown can still leave a
-sandbox until Daytona's lifecycle limits or GC remove it. See [security](security.md) for the network exception and
-[worker setup](../apps/worker/README.md) for runtime configuration.
+Cancellation is persisted first. Queued runs become canceled immediately. For an active run the runner sees the flag
+within a fraction of a second and aborts the executor, which destroys the sandbox in `finally`. On `SIGTERM` the runner
+stops taking runs and gives current ones `NANOGENT_DRAIN_SEC` (default 300) to finish before cancelling them. A hard kill
+can leave a sandbox container behind; `nanogent gc` removes old labelled ones. See [security](security.md) for sandbox
+isolation and [worker setup](../apps/worker/README.md) for configuration.
 
 ## Web dashboard
 
 `apps/web` serves the App Router dashboard and owner-scoped run API. Neon Auth's Next.js SDK handles email/password
 sign-in and the auth proxy. Server pages and run handlers independently validate the session; the UUID user ID is the
 only source of `owner_id`. Reads and cancellations check ownership before using the backend. Unowned and missing IDs
-both return 404. Database, auth and Trigger modules are marked `server-only`.
+both return 404. Database and auth modules are marked `server-only`.
 
 Each web request opens a small Neon serverless WebSocket pool and passes its Drizzle database to `PostgresRunStore`.
 The pool closes in `finally`, including after failures. HTTP-only Neon connections cannot supply the store's interactive
@@ -100,7 +101,7 @@ failures, keep their reservation, and return their ID for review, cancellation o
 The browser polls `GET /api/runs/[id]/events?from=N`, where N is inclusive. Responses contain at most 100 events,
 `nextSeq`, and `hasMore`. The view reloads the current run first, drains event pages, and stops after it has observed a
 terminal state and exhausted the events. Failed polls retry from the last successful cursor. PostgreSQL supplies state,
-usage and final results; no browser Trigger token is needed. Event payloads contain model usage rather than response
+usage and final results; Event payloads contain model usage rather than response
 text. The timeline shows those costs and tool input/output, and the final diff is rendered as escaped text.
 
 See [web setup](../apps/web/README.md) and [ADR 0006](decisions/0006-web-and-auth.md) for deployment and quota details.

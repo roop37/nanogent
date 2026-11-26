@@ -16,8 +16,6 @@ Direct dependencies are pinned; `pnpm-lock.yaml` has the full graph. All are per
 | `pg` | MIT | Worker and test Postgres connections |
 | `@types/pg` | MIT | node-postgres types |
 | `@daytonaio/sdk` | Apache-2.0 | Daytona sandbox client |
-| `@trigger.dev/sdk` | MIT | Hosted tasks, cancellation and progress metadata |
-| `@trigger.dev/build` | MIT | Worker build and runtime assets |
 | `next` | MIT | App Router dashboard and route handlers |
 | `react`, `react-dom` | MIT | Web rendering and browser state |
 | `@types/react`, `@types/react-dom` | MIT | React types |

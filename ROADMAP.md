@@ -4,7 +4,7 @@
 - Workspace, tooling, CI, core contracts (run states, events, budgets, pricing).
 - Local engine: Docker sandbox, agent loop, tools and permission policy, JSONL run store, `nanogent` CLI.
 - Eval suite: 14 small tasks with hidden tests, grading in a fresh sandbox, `nanogent eval` report.
-- Hosted version (code): Postgres run store, Daytona sandboxes, Trigger.dev worker, web dashboard with sign-in, live
+- Hosted version (code): Postgres run store, a runner for our own server, Daytona as an optional sandbox, web dashboard with sign-in, live
   progress, cancel and diff review. Not deployed yet.
 
 **Next**

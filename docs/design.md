@@ -59,5 +59,5 @@ Rough targets:
 
 ## Later
 
-Hosted version: Next.js dashboard, Postgres (Neon) for runs and events, Trigger.dev for long-running jobs, Daytona for
-sandboxes, sign-in with Better Auth. Then GitHub integration with an approval step before any pull request is opened.
+Hosted version: Next.js dashboard on Vercel, Postgres (Neon) for runs and events, a runner on our own server that
+executes queued runs in Docker sandboxes, sign-in with Better Auth. Then GitHub integration with an approval step before any pull request is opened.

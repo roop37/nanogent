@@ -57,8 +57,8 @@ Tests never call the model API; the model client is replaced with scripted respo
 ## Hosted mode
 
 The web dashboard supports email/password sign-in, task submission, live events, cancellation, verification and diff
-review. Neon stores runs, Trigger.dev runs the worker, and Daytona supplies sandboxes. The web server never receives
-model or sandbox credentials. See [web setup](apps/web/README.md) for environment variables and human deployment steps.
+review. Neon stores runs, and a runner on a server we control executes them in Docker sandboxes. The web server never
+receives model or sandbox credentials. See [web setup](apps/web/README.md) for environment variables and human deployment steps.
 
 ## Status
 
