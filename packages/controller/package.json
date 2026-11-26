@@ -7,6 +7,10 @@
     ".": {
       "types": "./src/index.ts",
       "import": "./dist/index.js"
+    },
+    "./remote": {
+      "types": "./dist/remote.d.ts",
+      "import": "./dist/remote.js"
     }
   },
   "scripts": {
@@ -17,6 +21,12 @@
   },
   "dependencies": {
     "@nanogent/core": "workspace:*",
-    "@nanogent/harness": "workspace:*"
+    "@nanogent/harness": "workspace:*",
+    "@trigger.dev/sdk": "4.8.10",
+    "@nanogent/store": "workspace:*",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@nanogent/worker": "workspace:*"
   }
 }

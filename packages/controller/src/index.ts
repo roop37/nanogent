@@ -131,3 +131,5 @@ export class LocalController implements Controller {
     }
   }
 }
+
+export { RemoteController, type RemoteTasks } from "./remote.js";
