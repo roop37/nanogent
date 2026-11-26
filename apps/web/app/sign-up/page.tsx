@@ -1,4 +1,21 @@
 import { AuthForm } from "@/components/auth-form";
-export default function Page() {
-  return <AuthForm signUp />;
+import { parseProviders } from "@/lib/auth-options";
+export const dynamic = "force-dynamic";
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string; error?: string; provider?: string }>;
+}) {
+  const params = await searchParams;
+  return (
+    <AuthForm
+      signUp
+      providers={parseProviders(process.env.NANOGENT_AUTH_PROVIDERS)}
+      next={params.next}
+      initialError={params.error}
+      errorProvider={
+        params.provider === "github" || params.provider === "google" ? params.provider : undefined
+      }
+    />
+  );
 }
