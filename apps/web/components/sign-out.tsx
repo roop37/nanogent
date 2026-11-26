@@ -8,7 +8,7 @@ export function SignOut() {
   return (
     <div className="flex items-center gap-3">
       {error && (
-        <span role="alert" className="text-sm text-red-700">
+        <span role="alert" className="text-sm text-destructive">
           Could not sign out.
         </span>
       )}

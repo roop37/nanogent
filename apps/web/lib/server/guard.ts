@@ -8,11 +8,11 @@ export class HttpError extends Error {
     super(message);
   }
 }
-export type Session = { user: { id: string } } | null;
+export type Session = { user: { id: string; name?: string; email?: string } } | null;
 export function requireUser(session: Session) {
   const id = z.uuid().safeParse(session?.user.id);
   if (!id.success) throw new HttpError(401, "Sign in to continue.");
-  return { id: id.data };
+  return { id: id.data, name: session?.user.name ?? "Account", email: session?.user.email ?? "" };
 }
 function originHost(origin: string): string | null {
   try {

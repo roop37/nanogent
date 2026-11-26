@@ -14,6 +14,7 @@ export function settings(env: Record<string, string | undefined> = process.env) 
     .safeParse(env.NANOGENT_MAX_RUN_COST_USD ?? 1);
   if (!cap.success || !max.success) throw new Error("Invalid web budget configuration");
   return {
+    environment: env.NANOGENT_ENV === "production" ? "prod" : "dev",
     dailyCap: cap.data,
     maxCost: Math.min(max.data, cap.data),
     models: [env.NANOGENT_ENV === "production" ? PRODUCTION_MODEL : DEFAULT_MODEL],

@@ -106,7 +106,8 @@ export function createApi(deps: ApiDependencies) {
       if (action === "events" && (!/^\d+$/.test(rawFrom) || !cursor.success))
         throw new HttpError(400, "Invalid event cursor.");
       const data = await deps.withBackend(async (backend) => {
-        if (action === "list") return { runs: await backend.list(user.id) };
+        if (action === "list")
+          return { runs: await backend.list(user.id), allowance: await backend.allowance(user.id) };
         if (action === "submit" && spec) {
           const submitted = spec;
           return backend.withOwnerLock(user.id, async () => {

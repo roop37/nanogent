@@ -1,118 +1,95 @@
 "use client";
+import { ArrowUpRight, Plus, Terminal } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { duration, money, type RunView } from "@/lib/types";
+import { duration, money } from "@/lib/types";
+import { relativeTime, repoName } from "@/lib/workspace";
+import { useRuns } from "./shell";
 import { Status } from "./status";
 import { Button } from "./ui/button";
-export function RunsList({ initial }: { initial: RunView[] }) {
-  const [runs, setRuns] = useState(initial);
-  const [error, setError] = useState("");
-  const [clock, setClock] = useState<number>();
-  useEffect(() => {
-    let disposed = false;
-    const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout>;
-    async function poll() {
-      try {
-        const response = await fetch("/api/runs", { cache: "no-store", signal: controller.signal });
-        if (response.status === 401) {
-          window.location.assign("/sign-in");
-          return;
-        }
-        if (!response.ok) throw new Error();
-        const data = await response.json();
-        if (!disposed) {
-          setRuns(data.runs);
-          setError("");
-          setClock(Date.now());
-        }
-      } catch {
-        if (!disposed) setError("Could not refresh runs. Retrying shortly.");
-      }
-      if (!disposed) timer = setTimeout(poll, 5000);
-    }
-    timer = setTimeout(poll, 5000);
-    return () => {
-      disposed = true;
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, []);
+import { Kbd } from "./ui/primitives";
+export function RunsList() {
+  const { runs, clock, connected } = useRuns();
   return (
-    <>
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+    <div className="mx-auto max-w-6xl">
+      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Your runs</h1>
-          <p className="mt-2 text-slate-600">Track a task from first command to final diff.</p>
+          <p className="mb-2 text-xs text-muted-foreground">WORKSPACE</p>
+          <h1 className="text-2xl font-medium tracking-tight">Recent runs</h1>
+          <p className="mt-2 text-muted-foreground">
+            Every task, from first command to verified change.
+          </p>
         </div>
         <Button asChild>
-          <Link href="/runs/new">New run</Link>
+          <Link href="/runs/new">
+            <Plus />
+            New run<Kbd>N</Kbd>
+          </Link>
         </Button>
       </div>
-      {error && (
-        <p role="alert" className="mb-4 text-red-700">
-          {error}
-        </p>
+      {!connected && (
+        <output className="mb-4 text-warning">Could not refresh runs. Retrying shortly.</output>
       )}
       {runs.length === 0 ? (
-        <div className="rounded-xl border bg-white px-6 py-16 text-center">
-          <h2 className="text-xl font-semibold">No runs yet</h2>
-          <p className="mx-auto mt-3 max-w-md text-slate-600">
-            Choose a public repository and describe the change. You can watch the work and review
-            the result here.
+        <div className="flex min-h-[50vh] flex-col items-center justify-center text-center">
+          <Terminal size={40} className="mb-6 text-muted-foreground" />
+          <h2 className="text-xl font-medium">Start with a task</h2>
+          <p className="mt-3 max-w-sm text-muted-foreground">
+            Nanogent works on a repository and checks the change with your tests. Follow the work
+            here, then review the result and diff.
           </p>
           <Button asChild className="mt-6">
-            <Link href="/runs/new">Create your first run</Link>
+            <Link href="/runs/new">
+              <Plus />
+              New run
+            </Link>
           </Button>
+          <p className="mt-5 text-xs text-muted-foreground">
+            Press <Kbd>N</Kbd> to start, or <Kbd>⌘ / Ctrl K</Kbd> to find a run
+          </p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border bg-white">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b bg-slate-50 text-slate-600">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="border-y text-muted-foreground">
               <tr>
-                {["Task / repository", "Status", "Cost", "Duration", "Created"].map((title) => (
-                  <th key={title} className="px-5 py-4 font-medium">
-                    {title}
+                {["State", "Task", "Repository", "Started", "Duration", "Cost"].map((label) => (
+                  <th key={label} className="px-3 py-3 font-normal">
+                    {label}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {runs.map((run) => (
-                <tr key={run.spec.id} className="border-b last:border-0 hover:bg-slate-50">
-                  <td className="max-w-xs px-5 py-5">
-                    <Link
-                      className="block truncate text-base font-medium hover:text-indigo-700"
-                      href={`/runs/${run.spec.id}`}
-                      title={run.spec.task}
-                    >
-                      {run.spec.task}
+                <tr key={run.spec.id} className="border-b hover:bg-accent">
+                  <td className="px-3 py-4">
+                    <Status state={run.state} verified={run.result?.verified} />
+                  </td>
+                  <td className="max-w-[320px] min-w-[180px] px-3 py-4">
+                    <Link className="group flex items-center gap-3" href={`/runs/${run.spec.id}`}>
+                      <span className="truncate text-[13px]">{run.spec.task.split("\n")[0]}</span>
+                      <ArrowUpRight
+                        size={13}
+                        className="shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100"
+                      />
                     </Link>
-                    <p className="mt-1 truncate text-slate-500">
-                      {"url" in run.spec.repo
-                        ? run.spec.repo.url.replace("https://", "")
-                        : "Local repository"}
-                    </p>
                   </td>
-                  <td className="px-5 py-5">
-                    <Status state={run.state} />
+                  <td className="whitespace-nowrap px-3 text-muted-foreground">{repoName(run)}</td>
+                  <td className="whitespace-nowrap px-3 text-muted-foreground">
+                    <time dateTime={run.createdAt}>{relativeTime(run.createdAt, clock)}</time>
                   </td>
-                  <td className="px-5 py-5 font-mono">{money(run.progress.costUsd)}</td>
-                  <td className="px-5 py-5">{duration(run, clock)}</td>
-                  <td className="whitespace-nowrap px-5 py-5 text-slate-600">
-                    <time dateTime={run.createdAt}>
-                      {new Date(run.createdAt).toISOString().replace("T", " ").slice(0, 16)} UTC
-                    </time>
-                  </td>
+                  <td className="px-3 font-mono">{duration(run, clock)}</td>
+                  <td className="px-3 font-mono">{money(run.progress.costUsd)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          <p className="mt-4 text-xs text-muted-foreground">
+            {runs.length >= 100 ? "Showing the latest 100 runs" : `${runs.length} runs`}
+            <span className="ml-3">All times relative to now</span>
+          </p>
         </div>
       )}
-      {runs.length >= 100 && (
-        <p className="mt-3 text-sm text-slate-500">Showing the latest 100 runs.</p>
-      )}
-    </>
+    </div>
   );
 }
