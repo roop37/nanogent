@@ -5,7 +5,7 @@ import type { Backend } from "./api";
 import { demoRuns } from "./demo-runs";
 import { testMode } from "./settings";
 
-type Entry = { owner: string; run: RunView; events: RunEvent[]; started: number };
+type Entry = { owner: string; run: RunView; events: RunEvent[]; polls: number };
 const globalState = globalThis as typeof globalThis & { nanogentWebFake?: Map<string, Entry> };
 function emit(entry: Entry, input: RunEventInput) {
   entry.events.push({
@@ -17,13 +17,41 @@ function emit(entry: Entry, input: RunEventInput) {
   entry.run.updatedAt = new Date().toISOString();
 }
 function advance(entry: Entry) {
-  if (!active(entry.run.state) || Date.now() - entry.started < 5000) return;
+  if (!active(entry.run.state) || !Number.isFinite(entry.polls)) return;
+  entry.polls++;
+  if (entry.polls === 1) {
+    emit(entry, { type: "sandbox.ready", data: { sandboxId: "scripted" } });
+    emit(entry, {
+      type: "tool.call",
+      data: { toolCallId: "test-1", name: "bash", risk: "exec", input: { command: "npm test" } },
+    });
+  }
+  if (entry.polls === 2)
+    emit(entry, {
+      type: "tool.result",
+      data: {
+        toolCallId: "test-1",
+        output: Array.from(
+          { length: 18 },
+          (_, i) => `Test ${i + 1}: ${i === 17 ? "addition failed" : "passed"}`,
+        ).join("\n"),
+        isError: true,
+        truncated: false,
+        durationMs: 320,
+      },
+    });
+  if (entry.polls < 4) return;
   entry.run.state = "completed";
   const result = {
     status: "completed" as const,
     summary: "Fixed the addition function.",
     diff: "diff --git a/calc.js b/calc.js\n--- a/calc.js\n+++ b/calc.js\n@@ -1 +1 @@\n-export const add = (a, b) => a - b;\n+export const add = (a, b) => a + b;\n",
-    verify: { command: "npm test", exitCode: 0, output: "1 test passed" },
+    verify: {
+      command: entry.run.spec.verifyCommand ?? "npm test",
+      exitCode: 0,
+      output: "1 test passed",
+      durationMs: 1240,
+    },
     verified: true,
     usage: { input: 20, output: 10, cacheRead: 0, cacheWrite: 0, costUsd: 0.0001 },
     turns: 1,
@@ -42,7 +70,7 @@ function advance(entry: Entry) {
       toolCallId: "edit-1",
       name: "str_replace_editor",
       risk: "write",
-      input: { path: "calc.js", command: "str_replace" },
+      input: { path: "calc.js", command: "str_replace", old_str: "a - b", new_str: "a + b" },
     },
   });
   emit(entry, {
@@ -68,7 +96,7 @@ export function fakeBackend(): Backend {
         owner: "00000000-0000-4000-8000-000000000001",
         run,
         events: [],
-        started: Number.POSITIVE_INFINITY,
+        polls: Number.NEGATIVE_INFINITY,
       };
       const updated = run.updatedAt;
       const file = run.spec.task.includes("reconnects")
@@ -101,7 +129,11 @@ export function fakeBackend(): Backend {
           type: "tool.result",
           data: {
             toolCallId: "read-1",
-            output: `Read ${file}. Found the implementation and its regression tests.`,
+            output: Array.from(
+              { length: 24 },
+              (_, i) =>
+                `  ${i + 1}  ${i === 0 ? `// ${file}` : `export const step${i} = () => ${i};`}`,
+            ).join("\n"),
             isError: false,
             truncated: false,
             durationMs: 42,
@@ -137,7 +169,11 @@ export function fakeBackend(): Backend {
       if (run.state !== "queued" && run.state !== "running")
         emit(entry, { type: "run.state_changed", data: { from: "running", to: run.state } });
       entry.events.forEach((event, index) => {
-        event.ts = new Date(Date.parse(run.createdAt) + index * 12000).toISOString();
+        const start = Date.parse(run.createdAt);
+        const span = Math.max(0, Date.parse(updated) - start);
+        event.ts = new Date(
+          start + (span * index) / Math.max(1, entry.events.length - 1),
+        ).toISOString();
       });
       run.updatedAt = updated;
       globalState.nanogentWebFake.set(run.spec.id, entry);
@@ -149,14 +185,12 @@ export function fakeBackend(): Backend {
       [...entries.values()]
         .filter((e) => e.owner === owner)
         .map((e) => {
-          advance(e);
           return e.run;
         })
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     get: async (owner, id) => {
       const e = entries.get(id);
       if (!e || e.owner !== owner) return undefined;
-      advance(e);
       return e.run;
     },
     events: async (id, from) => {
@@ -198,7 +232,7 @@ export function fakeBackend(): Backend {
           progress: { turns: 0, toolCalls: 0, costUsd: 0 },
         },
         events: [],
-        started: Date.now(),
+        polls: 0,
       };
       emit(e, { type: "run.created", data: { spec } });
       emit(e, { type: "run.state_changed", data: { from: "queued", to: "running" } });

@@ -1,11 +1,17 @@
 import { mkdir } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
+import { longDiff, verifiedRunPath } from "./run-fixtures";
 
 for (const viewport of [
   { width: 1440, height: 900 },
   { width: 390, height: 844 },
 ]) {
   test(`screens at ${viewport.width}`, async ({ page, context }) => {
+    const errors: string[] = [];
+    page.on("console", (message) => {
+      if (/same key|unique.*key|hydration/i.test(message.text())) errors.push(message.text());
+    });
+    page.on("pageerror", (error) => errors.push(error.message));
     await mkdir(".shots", { recursive: true });
     await page.setViewportSize(viewport);
     await page.emulateMedia({ reducedMotion: "reduce" });
@@ -45,10 +51,40 @@ for (const viewport of [
     await page.goto("/runs/new");
     await expect(page.getByLabel("Public repository URL")).toBeVisible();
     await shot("new-run");
-    await page.goto("/runs/run_000000demo_000000000000000000000004");
-    await expect(page.getByText("Verified: pass", { exact: true })).toBeVisible();
-    await expect(page.getByText("Model response", { exact: false })).toBeVisible();
-    await shot("run");
+    for (const [name, suffix] of [
+      ["running", "1"],
+      ["verified", "4"],
+      ["failed", "7"],
+      ["canceled", "8"],
+    ]) {
+      await page.goto(`/runs/run_000000demo_${suffix?.padStart(24, "0")}`);
+      await expect(
+        page
+          .getByRole("region", { name: "Activity", exact: true })
+          .getByText("Turn 1", { exact: true }),
+      ).toBeVisible();
+      await shot(`run-${name}`);
+      if (viewport.width < 900) {
+        if (name === "verified") {
+          await page.getByRole("tab", { name: "Changes", exact: true }).click();
+          await expect(page.getByRole("region", { name: "Diff", exact: true })).toBeVisible();
+          await shot("run-changes");
+        }
+        await page.getByRole("tab", { name: "Verify", exact: true }).click();
+        await shot(`run-${name}-verify`);
+      }
+    }
+    await page.route(`**/api${verifiedRunPath}`, async (route) => {
+      const response = await route.fetch();
+      const data = await response.json();
+      data.run.result.diff = longDiff;
+      await route.fulfill({ json: data });
+    });
+    await page.goto(verifiedRunPath);
+    if (viewport.width < 900) await page.getByRole("tab", { name: "Changes", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Show rest (105 more lines)" })).toBeVisible();
+    await shot("run-long-diff");
+    await page.unroute(`**/api${verifiedRunPath}`);
     await page.keyboard.press("Control+k");
     await expect(page.getByRole("dialog", { name: "Command palette" })).toBeVisible();
     await shot("command-palette");
@@ -62,5 +98,6 @@ for (const viewport of [
       await expect(page.getByRole("dialog", { name: "Runs", exact: true })).toBeVisible();
       await shot("mobile-drawer");
     }
+    expect(errors).toEqual([]);
   });
 }

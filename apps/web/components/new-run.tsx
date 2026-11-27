@@ -3,6 +3,7 @@ import { Play } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { modelName } from "@/lib/types";
 import { ProviderIcon } from "./provider-icon";
 import { useRuns } from "./shell";
 import { Button } from "./ui/button";
@@ -191,8 +192,12 @@ export function NewRun({
               Model
             </label>
             <input type="hidden" name="model" value={models[0]} />
-            <span id="model" className="inline-flex rounded border px-3 py-2 font-mono text-xs">
-              {models[0]}
+            <span
+              title={models[0]}
+              id="model"
+              className="inline-flex rounded border px-3 py-2 font-mono text-xs"
+            >
+              {modelName(models[0] ?? "")}
             </span>
           </div>
           <div>

@@ -104,6 +104,7 @@ export const ExecResultSchema = z.strictObject({
 });
 export type ExecResult = z.infer<typeof ExecResultSchema>;
 export const VerifyResultSchema = z.strictObject({
+  durationMs: NonNegativeNumberSchema.optional(),
   command: nonempty,
   exitCode: z.number().int().nullable(),
   output: z.string(),

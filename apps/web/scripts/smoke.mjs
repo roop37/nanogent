@@ -46,7 +46,13 @@ try {
 }
 const result = spawnSync(
   "pnpm",
-  ["exec", "playwright", "test", ...(shots ? ["--config", "playwright.shots.config.ts"] : [])],
+  [
+    "exec",
+    "playwright",
+    "test",
+    ...(shots ? ["--config", "playwright.shots.config.ts"] : []),
+    ...process.argv.slice(2).filter((arg) => arg !== "--shots"),
+  ],
   { stdio: "inherit", env },
 );
 process.exit(result.status ?? 1);

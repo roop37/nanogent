@@ -77,6 +77,7 @@ export class Executor {
         const check = budget.check();
         if (!check.ok) throw new Error(`Budget exceeded: ${check.reason}`);
         if (spec.verifyCommand) {
+          const verifyStarted = performance.now();
           const execution = await sandbox.exec(spec.verifyCommand, {
             timeoutSec: spec.limits.commandTimeoutSec,
             maxOutputBytes: spec.limits.maxToolOutputBytes,
@@ -84,6 +85,7 @@ export class Executor {
           });
           signal.throwIfAborted();
           verify = {
+            durationMs: Math.max(0, performance.now() - verifyStarted),
             command: spec.verifyCommand,
             exitCode: execution.timedOut ? null : execution.exitCode,
             output: execution.stdout + execution.stderr,

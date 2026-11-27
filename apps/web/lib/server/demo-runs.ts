@@ -96,7 +96,10 @@ export function demoRuns(now = Date.now()): RunView[] {
     ["canceled", "Replace the legacy config parser", "acme/cli", 0.0093],
   ];
   return tasks.map(([state, task, repo, cost], index) => {
-    const created = now - (index < 5 ? (index + 1) * 720000 : (index - 3) * 86400000);
+    const elapsed = [92, 30, 880, 124, 1500, 48, 340, 65][index] ?? 60;
+    const created =
+      now -
+      (index < 5 ? (index < 3 ? elapsed * 1000 : (index + 1) * 720000) : (index - 3) * 86400000);
     const spec = RunSpecSchema.parse({
       id: `run_000000demo_${String(index + 1).padStart(24, "0")}`,
       repo: { url: `https://github.com/${repo}` },
@@ -112,7 +115,7 @@ export function demoRuns(now = Date.now()): RunView[] {
       spec,
       state,
       createdAt: new Date(created).toISOString(),
-      updatedAt: new Date(terminal ? created + 124000 : now).toISOString(),
+      updatedAt: new Date(terminal ? created + elapsed * 1000 : now).toISOString(),
       cancelRequested: state === "canceled",
       progress: {
         turns: state === "queued" ? 0 : 4,
@@ -142,6 +145,7 @@ export function demoRuns(now = Date.now()): RunView[] {
                   ? null
                   : {
                       command: "pnpm test",
+                      durationMs: 1240,
                       exitCode: state === "completed" ? 0 : 1,
                       output:
                         state === "completed"
@@ -152,7 +156,7 @@ export function demoRuns(now = Date.now()): RunView[] {
               usage: { input: 4820, output: 1240, cacheRead: 3200, cacheWrite: 0, costUsd: cost },
               turns: 4,
               toolCalls: 9,
-              durationMs: 124000,
+              durationMs: elapsed * 1000,
               ...(state === "failed" ? { failureReason: "Verification failed (exit 1)." } : {}),
             },
           }

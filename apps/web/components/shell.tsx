@@ -1,5 +1,4 @@
 "use client";
-import { Command } from "cmdk";
 import {
   ChevronDown,
   Files,
@@ -13,6 +12,7 @@ import {
   WifiOff,
   X,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -27,7 +27,7 @@ import {
 } from "react";
 import { authClient } from "@/lib/auth-client";
 import { visiblePolling } from "@/lib/polling";
-import { active, money, type RunView } from "@/lib/types";
+import { active, modelName, money, type RunView } from "@/lib/types";
 import {
   closeDestination,
   type EditorTab,
@@ -42,6 +42,8 @@ import {
 import { StatusDot } from "./status";
 import { Button } from "./ui/button";
 import { Dialog, Kbd, Popover, Select, Toast, Tooltip } from "./ui/primitives";
+
+const Palette = dynamic(() => import("./palette").then((m) => m.Palette));
 
 type Allowance = { activeCount: number; charged: number };
 type Config = { dailyCap: number; maxCost: number; models: string[]; environment: string };
@@ -72,6 +74,8 @@ export function Shell({
   const [runs, setRuns] = useState(initial);
   const [allowance, setAllowance] = useState(initialAllowance);
   const [connected, setConnected] = useState(true);
+  const [online, setOnline] = useState(true);
+  const [retry, setRetry] = useState(0);
   const [clock, setClock] = useState(initialTime);
   const [collapsed, setCollapsed] = useState(false);
   const [drawer, setDrawer] = useState(false);
@@ -81,12 +85,25 @@ export function Shell({
   const [tabs, setTabs] = useState<EditorTab[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [message, setMessage] = useState("");
-  const [canceling, setCanceling] = useState(false);
   const dismiss = useCallback(() => setMessage(""), []);
   const runsRef = useRef(runs);
   runsRef.current = runs;
   const current = runs.find((r) => pathname === `/runs/${r.spec.id}`);
   const groups = groupRuns(runs, clock);
+  useEffect(() => {
+    const update = () => {
+      setOnline(navigator.onLine);
+      if (navigator.onLine) setRetry((value) => value + 1);
+      else setConnected(false);
+    };
+    update();
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
   const navigate = (href: string) => {
     setDrawer(false);
     setPalette(false);
@@ -142,7 +159,13 @@ export function Shell({
         return runsRef.current.some((r) => active(r.state)) ? 5000 : 30000;
       },
     );
-  }, [pathname]);
+  }, [pathname, retry]);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (!document.hidden && runsRef.current.some((r) => active(r.state))) setClock(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
       const editing =
@@ -183,22 +206,9 @@ export function Shell({
       setMessage("Could not sign out. Try again.");
     }
   }
-  async function cancel() {
-    if (!current || canceling) return;
-    setCanceling(true);
+  function cancel() {
     setPalette(false);
-    try {
-      const response = await fetch(`/api/runs/${current.spec.id}/cancel`, { method: "POST" });
-      if (!response.ok) throw new Error();
-      setMessage("Cancellation requested");
-      setRuns((prior) =>
-        prior.map((r) => (r.spec.id === current.spec.id ? { ...r, cancelRequested: true } : r)),
-      );
-      router.refresh();
-    } catch {
-      setMessage("Could not cancel the run. Try again.");
-    }
-    setCanceling(false);
+    window.dispatchEvent(new Event("nanogent-cancel"));
   }
   function closeTab(tab: EditorTab) {
     setTabs((prior) => tabReducer(prior, { type: "close", href: tab.href }));
@@ -216,7 +226,7 @@ export function Shell({
         setPalette(false);
       },
     },
-    ...(current && active(current.state) && !current.cancelRequested && !canceling
+    ...(current && active(current.state) && !current.cancelRequested
       ? [{ label: "Cancel current run", hint: "", icon: Square, action: cancel }]
       : []),
     { label: "Sign out", hint: "", icon: Terminal, action: signOut },
@@ -255,6 +265,20 @@ export function Shell({
             New run<Kbd>N</Kbd>
           </Button>
         </div>
+        {!connected && (
+          <output className="px-4 py-2 text-warning text-xs">
+            {online
+              ? "Connection interrupted. Retrying shortly."
+              : "You are offline. Reconnecting when the connection returns."}
+            <button
+              type="button"
+              className="mt-1 block underline"
+              onClick={() => setRetry((value) => value + 1)}
+            >
+              Retry now
+            </button>
+          </output>
+        )}
         <nav
           aria-label="Run explorer"
           className="sidebar-scroll"
@@ -262,7 +286,7 @@ export function Shell({
             if (!["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
             const links = Array.from(
               event.currentTarget.querySelectorAll<HTMLAnchorElement>("a[data-run]"),
-            );
+            ).filter((link) => link.getClientRects().length > 0);
             const index = links.indexOf(document.activeElement as HTMLAnchorElement);
             const next =
               event.key === "Home"
@@ -284,9 +308,6 @@ export function Shell({
           ) : (
             <>
               {renderGroup("Active", groups.active)}
-              <p className="px-4 pt-5 pb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                History
-              </p>
               {renderGroup("Today", groups.today)}
               {renderGroup("Earlier", groups.earlier)}
             </>
@@ -312,12 +333,12 @@ export function Shell({
   function renderGroup(title: string, list: RunView[]) {
     if (!list.length && title !== "Active") return null;
     return (
-      <section aria-label={title}>
-        <h2 className="flex h-7 items-center gap-1 px-3 text-[11px] text-muted-foreground">
+      <details aria-label={title} open>
+        <summary className="flex h-7 items-center gap-1 px-3 text-[11px] text-muted-foreground">
           <ChevronDown size={12} />
           {title}
           <span className="ml-auto font-mono">{list.length}</span>
-        </h2>
+        </summary>
         {!list.length && <p className="px-5 py-2 text-xs text-muted-foreground">No active runs</p>}
         {list.map((run) => (
           <Link
@@ -347,7 +368,7 @@ export function Shell({
             </div>
           </Link>
         ))}
-      </section>
+      </details>
     );
   }
   const account = (
@@ -546,7 +567,9 @@ export function Shell({
               Up to 3 active runs. Resets at midnight UTC.
             </p>
           </Popover>
-          <span className="desktop-status font-mono">{config.models[0]}</span>
+          <span title={config.models[0]} className="desktop-status font-mono">
+            {modelName(config.models[0] ?? "")}
+          </span>
           <span className="desktop-status">{config.environment}</span>
         </footer>
       </div>
@@ -559,65 +582,20 @@ export function Shell({
       >
         {sidebar()}
       </Dialog>
-      <Dialog
-        open={palette}
-        onOpenChange={(open) => {
-          setPalette(open);
-          if (!open) setQuery("");
-        }}
-        title="Command palette"
-        description="Search commands and runs. Use arrow keys and Enter to select."
-      >
-        <Command shouldFilter={false}>
-          <Command.Input
-            autoFocus
-            aria-label="Search commands and runs"
-            placeholder="Search commands, tasks, repositories…"
-            value={query}
-            onValueChange={setQuery}
-          />
-          <Command.List>
-            <Command.Empty>No results found.</Command.Empty>
-            <Command.Group heading="Commands">
-              {commands.map((c) => (
-                <Command.Item key={c.label} value={c.label} onSelect={c.action}>
-                  <c.icon size={15} />
-                  {c.label}
-                  {c.hint && (
-                    <span className="ml-auto">
-                      <Kbd>{c.hint}</Kbd>
-                    </span>
-                  )}
-                </Command.Item>
-              ))}
-            </Command.Group>
-            <Command.Group heading="Go to run">
-              {matches.map((run) => (
-                <Command.Item
-                  key={run.spec.id}
-                  value={run.spec.id}
-                  onSelect={() => navigate(`/runs/${run.spec.id}`)}
-                >
-                  <StatusDot state={run.state} />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate">{run.spec.task}</span>
-                    <span className="text-[11px] text-muted-foreground">{repoName(run)}</span>
-                  </span>
-                </Command.Item>
-              ))}
-            </Command.Group>
-          </Command.List>
-          <div className="flex items-center justify-between border-t px-4 py-2 text-xs text-muted-foreground">
-            <output aria-live="polite">
-              {commands.length + matches.length}{" "}
-              {commands.length + matches.length === 1 ? "result" : "results"}
-            </output>
-            <span>
-              <Kbd>↑ ↓</Kbd> navigate <Kbd>Enter</Kbd> open
-            </span>
-          </div>
-        </Command>
-      </Dialog>
+      {palette && (
+        <Palette
+          open={palette}
+          onOpenChange={(open) => {
+            setPalette(open);
+            if (!open) setQuery("");
+          }}
+          query={query}
+          setQuery={setQuery}
+          commands={commands}
+          matches={matches}
+          navigate={navigate}
+        />
+      )}
       <Toast message={message} dismiss={dismiss} />
     </RunsContext.Provider>
   );
