@@ -52,7 +52,7 @@ export function costLevel(cost: number, limit: number) {
   const ratio = limit > 0 ? cost / limit : cost > 0 ? 1 : 0;
   return {
     percent: Math.min(100, Math.max(0, ratio * 100)),
-    tone: ratio >= 1 ? "danger" : ratio >= 0.8 ? "warning" : "normal",
+    tone: ratio >= 1 ? "danger" : ratio + Number.EPSILON >= 0.8 ? "warning" : "normal",
   } as const;
 }
 export function toolInput(event: ToolEvent): Record<string, unknown> {

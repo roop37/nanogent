@@ -3,7 +3,7 @@ import type { RunEvent } from "@nanogent/core";
 import { Check, CircleX } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { groupTimeline, inputText, type Step, toolInput } from "@/lib/timeline";
-import { formatDuration, money } from "@/lib/types";
+import { commandDuration, formatDuration, money } from "@/lib/types";
 import { type Notify, TerminalBlock } from "./terminal-block";
 import { Skeleton } from "./ui/primitives";
 
@@ -72,7 +72,7 @@ function Content({ step, running, notify }: { step: Step; running: boolean; noti
           {step.result && (
             <p className="mt-1 text-xs text-muted-foreground">
               {step.result.data.isError ? "Command failed" : "Done"} ·{" "}
-              {formatDuration(step.result.data.durationMs)}
+              {commandDuration(step.result.data.durationMs)}
             </p>
           )}
         </div>
@@ -131,7 +131,7 @@ function Content({ step, running, notify }: { step: Step; running: boolean; noti
             ·{" "}
             {event.data.durationMs === undefined
               ? "Duration not recorded"
-              : formatDuration(event.data.durationMs)}
+              : commandDuration(event.data.durationMs)}
           </p>
         </div>
       );
@@ -150,7 +150,9 @@ function Content({ step, running, notify }: { step: Step; running: boolean; noti
               maxCostUsd: "cost limit",
               maxTurns: "turn limit",
               maxToolCalls: "tool call limit",
-              maxWallTimeSec: "time limit",
+              maxWallClockSec: "time limit",
+              maxToolOutputBytes: "tool output limit",
+              commandTimeoutSec: "command timeout",
             } as Record<string, string>
           )[event.data.reason] ?? event.data.reason}{" "}
           reached ({event.data.actual} / {event.data.limit}).
@@ -185,15 +187,17 @@ export function Timeline({
   const steps = useMemo(() => groupTimeline(events), [events]);
   const viewport = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
+  const wasRunning = useRef(running);
   const [behind, setBehind] = useState(false);
   const latest = events.at(-1)?.seq;
   // A new event can update an existing command block without adding a row.
   // biome-ignore lint/correctness/useExhaustiveDependencies: sequence triggers following after layout
   useEffect(() => {
     const node = viewport.current;
-    if (node && follow.current) node.scrollTop = node.scrollHeight;
-    else if (node) setBehind(true);
-  }, [latest]);
+    if (node && follow.current && (running || wasRunning.current))
+      node.scrollTop = node.scrollHeight;
+    wasRunning.current = running;
+  }, [latest, running]);
   return (
     <section className="activity-pane" aria-label="Activity">
       <h2 className="pane-title">
@@ -206,7 +210,7 @@ export function Timeline({
         onScroll={(e) => {
           const el = e.currentTarget;
           follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
-          if (follow.current) setBehind(false);
+          setBehind(running && !follow.current);
         }}
       >
         {!loaded ? (
@@ -237,7 +241,7 @@ export function Timeline({
           </p>
         )}
       </div>
-      {behind && (
+      {behind && running && (
         <button
           type="button"
           className="jump-latest"

@@ -6,7 +6,7 @@ import { composite, contrast, luminance } from "../lib/contrast";
 import { buildFileTree, changedRange, parseDiff, splitRows } from "../lib/diff";
 import { demoRuns } from "../lib/server/demo-runs";
 import { costLevel, groupTimeline, mergeEvents } from "../lib/timeline";
-import { duration, formatDuration, modelName } from "../lib/types";
+import { commandDuration, duration, formatDuration, modelName } from "../lib/types";
 
 const patch = (body: string, path = "src/a.ts") => `diff --git a/${path} b/${path}\n${body}`;
 describe("unified patch parsing", () => {
@@ -75,6 +75,18 @@ describe("unified patch parsing", () => {
     expect(file?.path).toBe("a b.ts");
     expect(file?.hunks[0]?.lines[0]?.text).toBe("<script>alert(1)</script>");
     expect(parseDiff("nonsense")).toEqual([]);
+  });
+  it("decodes Git's octal-escaped UTF-8 filenames", () => {
+    const file = parseDiff('diff --git "a/caf\\303\\251.txt" "b/caf\\303\\251.txt"\n')[0];
+    expect(file?.path).toBe("café.txt");
+  });
+  it("reads consecutive unified file patches without Git metadata", () => {
+    const remove = "--- old.txt\t2025-01-01\n+++ /dev/null\n@@ -1 +0,0 @@\n-old\n";
+    const add = "--- /dev/null\n+++ new.txt\t2025-01-02\n@@ -0,0 +1 @@\n+new\n";
+    expect(parseDiff(remove + add)).toMatchObject([
+      { path: "old.txt", deleted: 1, status: "D", patch: remove },
+      { path: "new.txt", added: 1, status: "A", patch: add },
+    ]);
   });
   it("aligns unequal replacements without losing line identities", () => {
     const lines =
@@ -184,6 +196,10 @@ describe("run metrics", () => {
     expect(costLevel(0, 0).percent).toBe(0);
     expect(costLevel(1, 0).tone).toBe("danger");
   });
+  it("marks eighty cents per dollar and eight cents per dime as amber", () => {
+    expect(costLevel(0.8, 1).tone).toBe("warning");
+    expect(costLevel(0.08, 0.1).tone).toBe("warning");
+  });
   it.each([
     [30000, "30s"],
     [722000, "12m 02s"],
@@ -200,11 +216,16 @@ describe("run metrics", () => {
     expect(modelName("claude-haiku-5-5")).toBe("Haiku 5.5");
     expect(modelName("claude-sonnet-5-5")).toBe("Sonnet 5.5");
   });
+  it("keeps sub-second verification and tool timings readable", () => {
+    expect(commandDuration(42)).toBe("42ms");
+    expect(commandDuration(1240)).toBe("1.24s");
+    expect(commandDuration(10000)).toBe("10s");
+  });
 });
 describe("token contrast", () => {
   const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
   const tokens = Object.fromEntries(
-    [...css.matchAll(/--([\w-]+): (#[\da-f]{6});/g)].map((m) => [m[1], m[2]]),
+    [...css.matchAll(/--([\w-]+): (#[\da-f]{6}(?:[\da-f]{2})?);/g)].map((m) => [m[1], m[2]]),
   ) as Record<string, string>;
   const token = (name: string) => {
     const value = tokens[name];
@@ -234,24 +255,29 @@ describe("token contrast", () => {
       });
   it("checks selection, diff backgrounds, buttons and control boundaries", () => {
     expect(contrast(token("foreground"), token("selection"))).toBeGreaterThanOrEqual(4.5);
-    expect(contrast("#ffffff", token("accent"))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(token("on-accent"), token("accent"))).toBeGreaterThanOrEqual(4.5);
     expect(contrast(token("panel"), token("error"))).toBeGreaterThanOrEqual(4.5);
     for (const opacity of [0.8, 0.9]) {
       expect(
-        contrast("#ffffff", composite(token("accent"), token("background"), opacity)),
+        contrast(token("on-accent"), composite(token("accent"), token("background"), opacity)),
       ).toBeGreaterThanOrEqual(4.5);
       expect(
         contrast(token("panel"), composite(token("error"), token("background"), opacity)),
       ).toBeGreaterThanOrEqual(4.5);
     }
-    for (const background of ["background", "panel", "input-background"]) {
+    for (const background of ["background", "panel", "hover", "input-background", "selected"]) {
       expect(contrast(token("input-border"), token(background))).toBeGreaterThanOrEqual(3);
       expect(contrast(token("focus"), token(background))).toBeGreaterThanOrEqual(3);
     }
-    for (const overlay of ["#2ea043", "#f85149"])
-      for (const text of ["foreground", "muted"])
-        expect(
-          contrast(token(text), composite(overlay, token("background"), 0.15)),
-        ).toBeGreaterThanOrEqual(4.5);
+    const blend = (overlay: string, background: string) => {
+      const color = token(overlay);
+      return composite(color.slice(0, 7), background, Number.parseInt(color.slice(7), 16) / 255);
+    };
+    for (const overlay of ["added", "removed"]) {
+      const tint = blend(overlay, token("background"));
+      for (const surface of [tint, blend("word-highlight", tint)])
+        for (const text of ["foreground", "muted"])
+          expect(contrast(token(text), surface)).toBeGreaterThanOrEqual(4.5);
+    }
   });
 });

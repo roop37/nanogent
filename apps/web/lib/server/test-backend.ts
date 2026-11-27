@@ -5,7 +5,7 @@ import type { Backend } from "./api";
 import { demoRuns } from "./demo-runs";
 import { testMode } from "./settings";
 
-type Entry = { owner: string; run: RunView; events: RunEvent[]; polls: number };
+type Entry = { owner: string; run: RunView; events: RunEvent[]; scripted?: true };
 const globalState = globalThis as typeof globalThis & { nanogentWebFake?: Map<string, Entry> };
 function emit(entry: Entry, input: RunEventInput) {
   entry.events.push({
@@ -16,17 +16,19 @@ function emit(entry: Entry, input: RunEventInput) {
   } as RunEvent);
   entry.run.updatedAt = new Date().toISOString();
 }
-function advance(entry: Entry) {
-  if (!active(entry.run.state) || !Number.isFinite(entry.polls)) return;
-  entry.polls++;
-  if (entry.polls === 1) {
+function advance(entry: Entry, from: number) {
+  if (!entry.scripted || !active(entry.run.state)) return;
+  // Replaying a page after a reload or an interrupted response must not advance the run.
+  if (entry.events.length === 2 && from === 1) {
     emit(entry, { type: "sandbox.ready", data: { sandboxId: "scripted" } });
     emit(entry, {
       type: "tool.call",
       data: { toolCallId: "test-1", name: "bash", risk: "exec", input: { command: "npm test" } },
     });
+    return;
   }
-  if (entry.polls === 2)
+  if (from !== entry.events.length + 1) return;
+  if (entry.events.at(-1)?.type === "tool.call") {
     emit(entry, {
       type: "tool.result",
       data: {
@@ -40,7 +42,9 @@ function advance(entry: Entry) {
         durationMs: 320,
       },
     });
-  if (entry.polls < 4) return;
+    return;
+  }
+  if (entry.events.at(-1)?.type !== "tool.result") return;
   entry.run.state = "completed";
   const result = {
     status: "completed" as const,
@@ -55,11 +59,11 @@ function advance(entry: Entry) {
     verified: true,
     usage: { input: 20, output: 10, cacheRead: 0, cacheWrite: 0, costUsd: 0.0001 },
     turns: 1,
-    toolCalls: 1,
+    toolCalls: 2,
     durationMs: 5000,
   };
   entry.run.result = result;
-  entry.run.progress = { turns: 1, toolCalls: 1, costUsd: result.usage.costUsd };
+  entry.run.progress = { turns: 1, toolCalls: result.toolCalls, costUsd: result.usage.costUsd };
   emit(entry, {
     type: "model.response",
     data: { messageId: "scripted", model: entry.run.spec.model, usage: result.usage },
@@ -96,7 +100,6 @@ export function fakeBackend(): Backend {
         owner: "00000000-0000-4000-8000-000000000001",
         run,
         events: [],
-        polls: Number.NEGATIVE_INFINITY,
       };
       const updated = run.updatedAt;
       const file = run.spec.task.includes("reconnects")
@@ -164,6 +167,20 @@ export function fakeBackend(): Backend {
             risk: "exec",
           },
         });
+      if (run.state === "running") {
+        for (const message of ["policy bash exec: allow", "policy editor write: allow"]) {
+          emit(entry, { type: "log", data: { level: "debug", message } });
+        }
+        emit(entry, {
+          type: "tool.call",
+          data: {
+            toolCallId: "test-reconnect",
+            name: "bash",
+            risk: "exec",
+            input: { command: "pnpm test -- reconnect" },
+          },
+        });
+      }
       if (run.result?.verify) emit(entry, { type: "verify.result", data: run.result.verify });
       if (run.result) emit(entry, { type: "run.result", data: run.result });
       if (run.state !== "queued" && run.state !== "running")
@@ -195,7 +212,7 @@ export function fakeBackend(): Backend {
     },
     events: async (id, from) => {
       const e = entries.get(id);
-      if (e) advance(e);
+      if (e) advance(e, from);
       const events = (e?.events ?? []).filter((event) => event.seq >= from);
       return { events, nextSeq: (events.at(-1)?.seq ?? from - 1) + 1, hasMore: false };
     },
@@ -232,7 +249,7 @@ export function fakeBackend(): Backend {
           progress: { turns: 0, toolCalls: 0, costUsd: 0 },
         },
         events: [],
-        polls: 0,
+        scripted: true,
       };
       emit(e, { type: "run.created", data: { spec } });
       emit(e, { type: "run.state_changed", data: { from: "queued", to: "running" } });

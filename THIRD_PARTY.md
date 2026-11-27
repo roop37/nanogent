@@ -38,4 +38,6 @@ Its license is included in `apps/web/components/ui/LICENSE`.
 | `cmdk` | MIT | Keyboard command palette |
 | `@radix-ui/react-dialog`, `@radix-ui/react-popover` | MIT | Focus-managed dialogs, drawer and menus |
 | `@radix-ui/react-tooltip`, `@radix-ui/react-tabs` | MIT | Accessible tooltips and tabs |
+| `react-resizable-panels` | MIT | Resizable activity and changes panes |
+| `shiki` | MIT | Lazy syntax highlighting with the Dark+ theme |
 | `@fontsource-variable/inter`, `@fontsource-variable/jetbrains-mono` | MIT packaging; SIL OFL-1.1 fonts | Self-hosted UI and code fonts |

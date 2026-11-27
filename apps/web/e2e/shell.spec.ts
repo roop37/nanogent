@@ -44,6 +44,68 @@ test("email flow retains validation and errors", async ({ page }) => {
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.locator("p[role=alert]")).toHaveText("Email or password is incorrect.");
 });
+test("sign-in stays centered and hides the footer on short screens", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/sign-in");
+  const form = page.locator(".auth-form");
+  const demo = page.locator(".auth-demo");
+  const formBox = await form.boundingBox();
+  const demoBox = await demo.boundingBox();
+  expect(formBox && demoBox).toBeTruthy();
+  if (!formBox || !demoBox) throw new Error("Sign-in panels are missing");
+  expect(Math.abs(formBox.y + formBox.height / 2 - (demoBox.y + demoBox.height / 2))).toBeLessThan(
+    2,
+  );
+  await expect(page.locator(".auth-footer")).toBeVisible();
+  await page.setViewportSize({ width: 1440, height: 680 });
+  await expect(page.locator(".auth-footer")).toBeHidden();
+  await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeInViewport();
+});
+test("overview and new run show readable durations and the fixed model", async ({
+  page,
+  context,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 640 });
+  await context.addCookies([
+    { name: "nanogent-test-session", value: "signed-in", domain: "127.0.0.1", path: "/" },
+  ]);
+  await page.goto("/");
+  const table = page.getByRole("table");
+  const running = table.getByRole("row").filter({ hasText: "Handle reconnects" });
+  const elapsed = running.getByRole("cell").nth(4);
+  await expect(elapsed).toHaveText(/^\d+m \d\ds$/);
+  const first = await elapsed.textContent();
+  await expect(elapsed).not.toHaveText(first ?? "");
+  await expect(table.getByRole("row").filter({ hasText: "Add keyboard navigation" })).toContainText(
+    "—",
+  );
+  await expect(
+    table.getByRole("row").filter({ hasText: "Cache repository metadata" }),
+  ).toContainText("25m 00s");
+  const explorer = page.getByRole("navigation", { name: "Run explorer" });
+  for (const group of ["Active", "Today", "Earlier"]) {
+    const summary = explorer.locator(`details[aria-label="${group}"] > summary`);
+    await expect(summary).toContainText(/\d+/);
+    await summary.click();
+    await expect(summary.locator("..")).not.toHaveAttribute("open", "");
+  }
+  await page.goto("/runs/new");
+  await expect(page.locator(".status-bar").getByText("Haiku 5.5", { exact: true })).toHaveAttribute(
+    "title",
+    "claude-haiku-5-5",
+  );
+  await expect(page.getByText("Haiku 5.5", { exact: true }).first()).toBeVisible();
+  await page.getByText("Advanced", { exact: false }).click();
+  await page.getByLabel("Setup commands").focus();
+  const actions = page.getByRole("button", { name: "Start run" });
+  await expect(actions).toBeInViewport();
+  const bottomGap = await actions.evaluate(
+    (node) =>
+      (document.querySelector(".status-bar")?.getBoundingClientRect().top ?? 0) -
+      node.getBoundingClientRect().bottom,
+  );
+  expect(bottomGap).toBeGreaterThanOrEqual(12);
+});
 test("tabs, palette, keyboard explorer and mobile drawer", async ({ page, context }) => {
   await context.addCookies([
     { name: "nanogent-test-session", value: "signed-in", domain: "127.0.0.1", path: "/" },

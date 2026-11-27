@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { longDiff, verifiedRunPath } from "./run-fixtures";
+import { longDiff, runningRunPath, verifiedRunPath } from "./run-fixtures";
 
 test.beforeEach(async ({ context }) => {
   await context.route("**/*", (route) => {
@@ -25,19 +25,25 @@ test("signed-in submission streams events, survives reload, and shows a verified
   await context.addCookies([
     { name: "nanogent-test-session", value: "empty", domain: "127.0.0.1", path: "/" },
   ]);
-  let polls = 0;
+  let holdAt = Number.POSITIVE_INFINITY;
   let finish = false;
   let interrupt = false;
   await page.route(/\/api\/runs\/[^/]+\/events\?from=/, async (route) => {
-    if (interrupt) {
+    const from = Number(new URL(route.request().url()).searchParams.get("from"));
+    if (interrupt && from === 1) {
       interrupt = false;
       await route.fulfill({ status: 503, contentType: "application/json", body: "{}" });
-    } else if (polls < 2 || finish) {
-      polls++;
+    } else if (finish) {
       await route.continue();
-    } else {
-      const from = Number(new URL(route.request().url()).searchParams.get("from"));
+    } else if (from >= holdAt) {
       await route.fulfill({ json: { events: [], nextSeq: from, hasMore: false } });
+    } else {
+      const response = await route.fetch();
+      if (response.ok()) {
+        const page = (await response.json()) as import("../lib/types").EventPage;
+        if (page.events.some((event) => event.type === "tool.result")) holdAt = page.nextSeq;
+      }
+      await route.fulfill({ response });
     }
   });
   await page.goto("/runs/new");
@@ -45,8 +51,15 @@ test("signed-in submission streams events, survives reload, and shows a verified
   await page.getByLabel("Task", { exact: true }).fill("Fix the addition function");
   await page.getByText("Advanced", { exact: false }).click();
   await page.getByLabel("Verify command").fill("npm test");
+  const submission = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/runs" && response.request().method() === "POST",
+  );
   await page.getByRole("button", { name: "Start run" }).click();
-  await expect(page).toHaveURL(/\/runs\/run_/);
+  const submitted = await submission;
+  expect(submitted.status()).toBe(202);
+  const { id } = await submitted.json();
+  await expect(page).toHaveURL(`/runs/${id}`, { timeout: 15000 });
   const activity = page.getByRole("region", { name: "Activity", exact: true });
   await expect(activity.getByText("$ npm test", { exact: true })).toBeVisible();
   await expect(page.locator(".run-header").getByText("running", { exact: true })).toBeVisible();
@@ -57,9 +70,10 @@ test("signed-in submission streams events, survives reload, and shows a verified
 
   interrupt = true;
   await page.reload();
-  await expect(page.getByRole("alert")).toContainText("Connection interrupted");
+  const notice = page.getByRole("alert").filter({ hasText: "Connection interrupted" });
+  await expect(notice).toBeVisible();
   finish = true;
-  await page.getByRole("button", { name: "Retry now" }).click();
+  await notice.getByRole("button", { name: "Retry now" }).click();
   await expect(page.locator(".verification-badge")).toHaveText("Verified");
   await expect(activity.getByText("Turn 1", { exact: true })).toBeVisible();
   await expect(activity.getByText("str_replace calc.js", { exact: true })).toBeVisible();
@@ -123,6 +137,37 @@ test("an active run can be canceled with confirmation and the keyboard shortcut"
   await dialog.getByRole("button", { name: "Confirm cancel" }).click();
   await expect(page.locator(".run-header").getByText("canceled", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Cancel run", exact: true })).toHaveCount(0);
+});
+
+test("a running snapshot stays available across resize, reload and offline recovery", async ({
+  page,
+  context,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await context.addCookies([
+    { name: "nanogent-test-session", value: "signed-in", domain: "127.0.0.1", path: "/" },
+  ]);
+  await page.goto(runningRunPath);
+  const diff = page.getByRole("region", { name: "Diff", exact: true });
+  await expect(diff).toContainText("withCredentials: true");
+  const clock = page.locator(".run-metrics dd").first();
+  const divider = page.getByRole("separator", { name: "Resize activity and changes" });
+  const original = await divider.getAttribute("aria-valuenow");
+  await divider.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(divider).not.toHaveAttribute("aria-valuenow", original ?? "");
+  const resized = await divider.getAttribute("aria-valuenow");
+  await page.reload();
+  await expect(divider).toHaveAttribute("aria-valuenow", resized ?? "");
+  await expect(clock).not.toHaveText("—");
+  await context.setOffline(true);
+  const notice = page.getByRole("main").getByRole("alert");
+  await expect(notice).toContainText("You are offline.");
+  await expect(page.locator(".status-bar")).toContainText("Offline");
+  await expect(diff).toContainText("withCredentials: true");
+  await context.setOffline(false);
+  await expect(notice).toHaveCount(0);
+  await expect(page.locator(".status-bar")).toContainText("Connected");
 });
 
 test("large patches, file navigation, events and panel controls", async ({ page, context }) => {

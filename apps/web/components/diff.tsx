@@ -74,8 +74,12 @@ function FileDiff({
 }) {
   const [rest, setRest] = useState(false);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
-  const [tokens, setTokens] = useState<Map<number, CodeToken[]>>(new Map());
+  const [highlight, setHighlight] = useState<{
+    lines: DiffLine[];
+    tokens: Map<number, CodeToken[]>;
+  }>();
   const lines = useMemo(() => file.hunks.flatMap((h) => h.lines), [file]);
+  const tokens = highlight?.lines === lines ? highlight.tokens : undefined;
   const limit = rest ? lines.length : 2000;
   useEffect(() => {
     if (collapsed) return;
@@ -84,7 +88,7 @@ function FileDiff({
       void import("@/lib/highlight")
         .then((m) => m.highlightLines(file.path, lines.slice(0, limit), controller.signal))
         .then((value) => {
-          if (!controller.signal.aborted) setTokens(value);
+          if (!controller.signal.aborted) setHighlight({ lines, tokens: value });
         })
         .catch(() => {
           /* Plain text remains available if highlighting fails. */
@@ -196,7 +200,7 @@ function FileDiff({
                         </span>
                         <code>
                           {line && (
-                            <Code line={line} other={other} tokens={tokens.get(line.index)} />
+                            <Code line={line} other={other} tokens={tokens?.get(line.index)} />
                           )}
                         </code>
                       </div>
@@ -245,7 +249,7 @@ function Tree({
           <button
             type="button"
             role="treeitem"
-            key={node.path}
+            key={fileKey(files[node.file])}
             className="file-tree-row"
             tabIndex={-1}
             onClick={() => select(node.file as number)}
@@ -296,12 +300,16 @@ function Directory({
         {node.name}
       </span>
       {open && (
-        <fieldset className="pl-4">
+        // biome-ignore lint/a11y/useSemanticElements: tree groups do not have form controls
+        <div role="group" className="pl-4">
           <Tree nodes={node.children} files={files} select={select} />
-        </fieldset>
+        </div>
       )}
     </div>
   );
+}
+function fileKey(file: DiffFile | undefined) {
+  return file && JSON.stringify([file.oldPath, file.path, file.status]);
 }
 export function Diff({ diff, notify }: { diff: string; notify: Notify }) {
   const files = useMemo(() => parseDiff(diff), [diff]);
@@ -397,9 +405,13 @@ export function Diff({ diff, notify }: { diff: string; notify: Notify }) {
           if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
             const item = items[index];
             const expanded = item?.getAttribute("aria-expanded");
+            event.preventDefault();
             if (expanded === (event.key === "ArrowRight" ? "false" : "true")) {
-              event.preventDefault();
               item?.click();
+            } else if (event.key === "ArrowRight" && expanded === "true") {
+              items[index + 1]?.focus();
+            } else if (event.key === "ArrowLeft") {
+              item?.parentElement?.closest<HTMLElement>('[role="treeitem"]')?.focus();
             }
           }
         }}
@@ -409,7 +421,7 @@ export function Diff({ diff, notify }: { diff: string; notify: Notify }) {
       <div className="diff-files">
         {files.map((file, index) => (
           <FileDiff
-            key={file.path}
+            key={fileKey(file)}
             file={file}
             index={index}
             collapsed={collapsed.has(index)}

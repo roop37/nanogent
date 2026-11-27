@@ -4,6 +4,7 @@ export interface RunView extends RunRecord {
   updatedAt: string;
   cancelRequested: boolean;
   progress: { turns: number; toolCalls: number; costUsd: number };
+  diffSnapshot?: string;
 }
 export interface EventPage {
   events: RunEvent[];
@@ -25,6 +26,12 @@ export function formatDuration(ms: number) {
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ${String(seconds % 60).padStart(2, "0")}s`;
   return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m`;
+}
+
+export function commandDuration(ms: number) {
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  if (ms < 60000) return `${(ms / 1000).toFixed(2).replace(/\.?0+$/, "")}s`;
+  return formatDuration(ms);
 }
 export function modelName(id: string) {
   const match = /^claude-(haiku|sonnet|opus)-(\d+)-(\d+)$/.exec(id);

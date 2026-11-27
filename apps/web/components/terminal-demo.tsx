@@ -1,16 +1,16 @@
 import { Check, GitBranch, Terminal } from "lucide-react";
 export function TerminalDemo() {
   const lines = [
-    ["text-muted-foreground", "$ nanogent run"],
-    ["text-foreground", "Fix cursor pagination on the activity feed"],
-    ["text-link", "› read  src/api/activity.ts"],
-    ["text-link", "› bash  pnpm test activity"],
-    ["text-destructive", "  FAIL  skips records with the same timestamp"],
-    ["text-link", "› edit  src/api/activity.ts"],
-    ["text-link", "› bash  pnpm test activity"],
-    ["text-success", "  PASS  12 tests · 3 files"],
-    ["text-success", "✓ verified  All checks passed"],
-    ["text-muted-foreground", "  3 files changed  +42 −18"],
+    ["start", "text-muted-foreground", "$ nanogent run"],
+    ["task", "text-foreground", "Fix cursor pagination on the activity feed"],
+    ["read", "text-link", "› read  src/api/activity.ts"],
+    ["first-test", "text-link", "› bash  pnpm test activity"],
+    ["failure", "text-destructive", "  FAIL  skips records with the same timestamp"],
+    ["edit", "text-link", "› edit  src/api/activity.ts"],
+    ["second-test", "text-link", "› bash  pnpm test activity"],
+    ["pass", "text-success", "  PASS  12 tests · 3 files"],
+    ["verify", "text-success", "✓ verified  All checks passed"],
+    ["changes", "text-muted-foreground", "  3 files changed  +42 −18"],
   ];
   return (
     <aside className="auth-demo" aria-hidden="true">
@@ -28,9 +28,9 @@ export function TerminalDemo() {
             <Terminal size={14} /> activity-feed <span className="ml-auto">run / 0184</span>
           </div>
           <div className="space-y-3 p-5 font-mono text-xs">
-            {lines.map(([color, line], i) => (
+            {lines.map(([id, color, line], i) => (
               <div
-                key={line}
+                key={id}
                 className={`terminal-line ${color}`}
                 style={{ "--delay": `${i * 0.6}s` } as React.CSSProperties}
               >

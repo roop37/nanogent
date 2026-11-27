@@ -170,7 +170,7 @@ export function AuthForm({
             </Link>
           </p>
         </div>
-        <p className="text-xs text-muted-foreground">Run a task. Review the change.</p>
+        <p className="auth-footer text-xs text-muted-foreground">Run a task. Review the change.</p>
       </section>
       <TerminalDemo />
     </main>

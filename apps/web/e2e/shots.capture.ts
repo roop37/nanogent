@@ -20,6 +20,7 @@ for (const viewport of [
     );
     const shot = async (name: string) => {
       await page.evaluate(() => document.fonts.ready);
+      await expect(page.getByRole("button", { name: /Next.js Dev Tools/ })).toBeHidden();
       await page.screenshot({
         path: `.shots/${name}-${viewport.width}x${viewport.height}.png`,
         animations: "disabled",
@@ -63,6 +64,8 @@ for (const viewport of [
           .getByRole("region", { name: "Activity", exact: true })
           .getByText("Turn 1", { exact: true }),
       ).toBeVisible();
+      if (viewport.width >= 900 && (name === "running" || name === "verified"))
+        await expect(page.getByRole("region", { name: "Diff", exact: true })).toBeVisible();
       await shot(`run-${name}`);
       if (viewport.width < 900) {
         if (name === "verified") {

@@ -84,6 +84,16 @@ export const demoDiff = Object.entries(changes)
         .join("\n")}\n`,
   )
   .join("");
+const reconnectDiff = `diff --git a/src/events.ts b/src/events.ts
+--- a/src/events.ts
++++ b/src/events.ts
+@@ -1,4 +1,4 @@
+ export function subscribe(url: string) {
+-  const stream = new EventSource(url);
++  const stream = new EventSource(url, { withCredentials: true });
+   return () => stream.close();
+ }
+`;
 export function demoRuns(now = Date.now()): RunView[] {
   const tasks: [RunState, string, string, number][] = [
     ["running", "Handle reconnects in the event stream", "acme/console", 0.0182],
@@ -117,6 +127,7 @@ export function demoRuns(now = Date.now()): RunView[] {
       createdAt: new Date(created).toISOString(),
       updatedAt: new Date(terminal ? created + elapsed * 1000 : now).toISOString(),
       cancelRequested: state === "canceled",
+      ...(state === "running" ? { diffSnapshot: reconnectDiff } : {}),
       progress: {
         turns: state === "queued" ? 0 : 4,
         toolCalls: state === "queued" ? 0 : 9,

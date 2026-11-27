@@ -11,7 +11,7 @@ From the repository root:
 
 ```sh
 pnpm install --frozen-lockfile
-pnpm --filter @nanogent/controller... build
+pnpm --filter @nanogent/config... --filter @nanogent/controller... build
 pnpm --filter @nanogent/web dev
 ```
 
@@ -96,7 +96,8 @@ Nothing here provisions or deploys services automatically.
 4. Run `vercel link` at the repo root. Select the Next.js framework and set Root Directory to `apps/web`; enable access
    to source outside that directory. Set Install Command to `cd ../.. && pnpm install --frozen-lockfile` and Build Command
    to `cd ../.. && pnpm exec turbo run build --filter=@nanogent/web`. Keep the default Next.js output directory.
-   A root-shell equivalent is `pnpm --filter @nanogent/controller... build && pnpm --filter @nanogent/web build`.
+   For a local production build, run `pnpm --filter @nanogent/config... --filter @nanogent/controller... build`,
+   then `pnpm --filter @nanogent/web build`.
 5. Add the web variables above to Vercel Preview/Production settings, with matching Neon branches. Keep the cookie
    secret stable. Deploy Vercel through the human's chosen Git or CLI workflow.
 6. Set up the runner on a server as described in [the runner README](../worker/README.md): database URL, Anthropic key
@@ -120,7 +121,22 @@ Open tabs last for the browser session; denied storage falls back to in-memory t
 The shared run list refreshes every five seconds with active runs and every thirty seconds otherwise. Hidden tabs
 abort outstanding polls and stop both list and event polling; returning to the tab refreshes immediately. The status
 bar's connection indicator reports the last run-list request. Its budget includes active reservations, matching the
-server's allowance calculation. History groups use UTC dates.
+server's allowance calculation. Today and Earlier use UTC dates.
+
+## Run review
+
+Activity groups each command with its result and follows new events while a run is active. Scroll up to read earlier
+output, then use **Jump to latest** to resume following. Reloading reconstructs the timeline from recorded events.
+Cmd/Ctrl+. opens the cancellation dialog. The status badge updates when the runner records the cancellation.
+
+Changes shows the final patch or the latest snapshot when the run API supplies one. The desktop divider can be
+dragged or adjusted with the keyboard. Pane sizes are saved in the browser. Below 900 px, use the Activity, Changes
+and Verify tabs. Split diffs are available from 1100 px. In the diff, J and K move between file headers, and `[`
+and `]` collapse and expand all files. Expandable context is limited to lines included in the patch. Long files show
+the first 2,000 lines until you choose **Show rest**. Copy or download the full patch at any time.
+
+Verification shows the harness command, exit code, duration and output. Events shows the raw records. Select a type
+to filter the list and copy the filtered records as JSON.
 
 ## Social sign-in
 
@@ -154,11 +170,14 @@ pnpm --filter @nanogent/web shots
 
 The command starts its own local test-mode dev server, blocks external browser requests, sets a test session cookie,
 and writes PNGs to the ignored `apps/web/.shots/` directory. It captures sign-in, sign-up, home with runs, home empty,
-new run, a verified run, the command palette and the collapsed explorer at 1440 × 900 and 390 × 844, plus the mobile
-drawer at 390 × 844. Reduced motion keeps captures stable. It uses the same Chromium availability check as smoke tests.
+new run, running, verified, failed, canceled and long-diff views, the command palette and the collapsed explorer at
+1440 × 900 and 390 × 844. It also captures the mobile Changes and Verify tabs and the mobile drawer. Reduced motion
+keeps captures stable. The screenshot and smoke servers hide Next.js development indicators.
+The commands use the same Chromium availability check.
 A missing browser or the known macOS Mach-port denial prints a skip reason; other failures remain fatal.
 
 Test mode seeds eight runs: running, queued, blocked, three verified completions, verification failure and cancellation.
 The `nanogent-test-session=signed-in` cookie selects that account. Use `nanogent-test-session=empty` for a separate
 unseeded account, including submission tests. The seeded account has three active runs; cancel one to submit another.
 The seed and test-session bypass are both disabled outside the restricted local test environment.
+New runs in test mode advance on new event cursors, so a replay or an interrupted response can be fetched again.

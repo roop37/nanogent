@@ -35,9 +35,10 @@ describe("scripted run progression", () => {
     expect((await backend.get(owner, spec.id))?.state).toBe("running");
     const first = await backend.events(spec.id, 1);
     expect(first.events.at(-1)?.type).toBe("tool.call");
+    expect(await backend.events(spec.id, 1)).toEqual(first);
     const second = await backend.events(spec.id, first.nextSeq);
     expect(second.events.at(-1)?.type).toBe("tool.result");
-    await backend.events(spec.id, second.nextSeq);
+    expect(await backend.events(spec.id, first.nextSeq)).toEqual(second);
     expect((await backend.get(owner, spec.id))?.state).toBe("running");
     await backend.events(spec.id, second.nextSeq);
     expect((await backend.get(owner, spec.id))?.result?.verified).toBe(true);

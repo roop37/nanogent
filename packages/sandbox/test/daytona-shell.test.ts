@@ -1,5 +1,6 @@
 import { execFile, spawn } from "node:child_process";
 import { copyFile, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -9,7 +10,7 @@ const exec = promisify(execFile);
 const env = { PATH: process.env.PATH, HOME: "/tmp" };
 
 it("preserves shell state, enforces timeout and caps output across the session bridge", async () => {
-  const dir = await mkdtemp("/private/tmp/nanogent-shell-");
+  const dir = await mkdtemp(join(tmpdir(), "nanogent-shell-"));
   for (const name of ["shell.py", "daytona-shell.py"])
     await copyFile(new URL(`../docker/${name}`, import.meta.url), join(dir, name));
   const bridge = join(dir, "daytona-shell.py");
@@ -41,7 +42,7 @@ it("preserves shell state, enforces timeout and caps output across the session b
   }
 });
 it("confines file operations to a configurable workspace, including symlink parents", async () => {
-  const root = await mkdtemp("/private/tmp/nanogent-files-");
+  const root = await mkdtemp(join(tmpdir(), "nanogent-files-"));
   const workspace = join(root, "workspace");
   await mkdir(workspace);
   await writeFile(join(root, "outside"), "outside");

@@ -1,6 +1,6 @@
 "use client";
 import { Copy } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { parseAnsi } from "@/lib/ansi";
 export type Notify = (message: string) => void;
 export async function copyText(text: string, notify: Notify, label = "Copied") {
@@ -48,6 +48,7 @@ export function TerminalBlock({
   notify: Notify;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const outputId = useId();
   const lines = text.split("\n");
   const visible = expanded ? text : lines.slice(0, 12).join("\n");
   return (
@@ -61,7 +62,7 @@ export function TerminalBlock({
         />
       </div>
       {(text || running) && (
-        <pre className="terminal-output">
+        <pre className="terminal-output" id={outputId}>
           {parseAnsi(visible).map((span) => (
             <span
               key={span.offset}
@@ -84,6 +85,8 @@ export function TerminalBlock({
         <button
           type="button"
           className="text-link px-3 py-2 text-xs"
+          aria-controls={outputId}
+          aria-expanded={expanded}
           onClick={() => setExpanded(!expanded)}
         >
           {expanded ? "Show less" : `Show all ${lines.length} lines`}

@@ -101,8 +101,13 @@ failures, keep their reservation, and return their ID for review, cancellation o
 The browser polls `GET /api/runs/[id]/events?from=N`, where N is inclusive. Responses contain at most 100 events,
 `nextSeq`, and `hasMore`. The view reloads the current run first, drains event pages, and stops after it has observed a
 terminal state and exhausted the events. Failed polls retry from the last successful cursor. PostgreSQL supplies state,
-usage and final results; Event payloads contain model usage rather than response
-text. The timeline shows those costs and tool input/output, and the final diff is rendered as escaped text.
+usage and final results. The timeline groups calls and results by tool call ID, uses event sequences for row identity
+and shows usage from model responses. The verification panel uses the harness event as soon as it arrives.
+
+The run view accepts an optional `diffSnapshot` on the run API response. The production backend currently provides
+the final patch through the run result. The viewer parses the patch in the browser and renders code and terminal
+spans as text. The diff viewer and syntax highlighter load separately. Plain text renders first, then Shiki loads the
+matching language and tokenizes in idle batches. Patch download retains the original data.
 
 The signed-in shell shares one run list across its explorer, overview and command palette. `GET /api/runs` also returns
 owner-scoped allowance data for the status bar. List polling runs every five seconds with active runs, thirty seconds

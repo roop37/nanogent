@@ -18,13 +18,28 @@ export type DiffFile = {
 };
 
 function pathName(raw: string, stripPrefix = true) {
-  let value = raw.trim().split("\t")[0] ?? raw;
-  if (value.startsWith('"')) {
-    try {
-      value = JSON.parse(value);
-    } catch {
-      /* Keep malformed paths visible. */
-    }
+  let value = raw.split("\t")[0] ?? raw;
+  if (value.startsWith('"') && value.endsWith('"')) {
+    const encoder = new TextEncoder();
+    const escapes: Record<string, number> = {
+      a: 7,
+      b: 8,
+      t: 9,
+      n: 10,
+      v: 11,
+      f: 12,
+      r: 13,
+      '"': 34,
+      "\\": 92,
+    };
+    const bytes = [...value.slice(1, -1).matchAll(/\\([0-7]{3}|.)|[^\\]+/gs)].flatMap(
+      ([part, escaped]) => {
+        if (!escaped) return [...encoder.encode(part)];
+        if (/^[0-7]{3}$/.test(escaped)) return [Number.parseInt(escaped, 8)];
+        return [escapes[escaped] ?? escaped.charCodeAt(0)];
+      },
+    );
+    value = new TextDecoder().decode(Uint8Array.from(bytes));
   }
   return stripPrefix ? value.replace(/^[ab]\//, "") : value;
 }
@@ -37,14 +52,24 @@ export function parseDiff(patch: string): DiffFile[] {
   let remainingOld = 0;
   let remainingNew = 0;
   const chunks = patch.match(/[^\n]*\n|[^\n]+$/g) ?? [];
+  const header = /^diff --git ("(?:\\.|[^"\\])*"|a\/.*?) ("(?:\\.|[^"\\])*"|b\/.*)$/;
+  let gitPatch = false;
   for (const [index, chunk] of chunks.entries()) {
     const line = chunk.replace(/\r?\n$/, "");
-    if (line.startsWith("diff --git ")) {
-      const paths = /^diff --git ("(?:\\.|[^"\\])*"|a\/.*?) ("(?:\\.|[^"\\])*"|b\/.*)$/.exec(line);
+    const paths = header.exec(line);
+    if (paths) gitPatch = true;
+    const unifiedHeader =
+      !gitPatch &&
+      remainingOld === 0 &&
+      remainingNew === 0 &&
+      line.startsWith("--- ") &&
+      chunks[index + 1]?.startsWith("+++ ");
+    if (paths || unifiedHeader) {
+      const oldPath = pathName(paths?.[1] ?? line.slice(4));
       file = {
-        path: pathName(paths?.[2] ?? "Unknown file"),
-        oldPath: pathName(paths?.[1] ?? "Unknown file"),
-        status: "M",
+        path: paths?.[2] ? pathName(paths[2]) : oldPath,
+        oldPath,
+        status: oldPath === "/dev/null" ? "A" : "M",
         added: 0,
         deleted: 0,
         binary: false,
@@ -53,6 +78,8 @@ export function parseDiff(patch: string): DiffFile[] {
       };
       files.push(file);
       hunk = undefined;
+      remainingOld = 0;
+      remainingNew = 0;
       continue;
     }
     if (!file) continue;
@@ -97,14 +124,17 @@ export function parseDiff(patch: string): DiffFile[] {
       file.path = pathName(line.slice(10), false);
       file.status = "R";
     }
-    if (line.startsWith("--- ") && line.slice(4) !== "/dev/null")
-      file.oldPath = pathName(line.slice(4));
-    if (line.startsWith("+++ ") && line.slice(4) !== "/dev/null")
-      file.path = pathName(line.slice(4));
-    if (line === "--- /dev/null") file.status = "A";
-    if (line === "+++ /dev/null") {
-      file.status = "D";
-      file.path = file.oldPath;
+    if (line.startsWith("--- ")) {
+      const path = pathName(line.slice(4));
+      if (path === "/dev/null") file.status = "A";
+      else file.oldPath = path;
+    }
+    if (line.startsWith("+++ ")) {
+      const path = pathName(line.slice(4));
+      if (path === "/dev/null") {
+        file.status = "D";
+        file.path = file.oldPath;
+      } else file.path = path;
     }
     if (line.startsWith("Binary files ") || line === "GIT binary patch") file.binary = true;
   }
@@ -118,12 +148,12 @@ export function buildFileTree(files: DiffFile[]): FileNode[] {
     const parts = file.path.split("/");
     parts.forEach((name, depth) => {
       const path = parts.slice(0, depth + 1).join("/");
-      let node = nodes.find((n) => n.path === path);
+      const leaf = depth === parts.length - 1;
+      let node = leaf ? undefined : nodes.find((n) => n.path === path && n.file === undefined);
       if (!node) {
-        node = { name, path, children: [] };
+        node = { name, path, children: [], ...(leaf ? { file: index } : {}) };
         nodes.push(node);
       }
-      if (depth === parts.length - 1) node.file = index;
       nodes = node.children;
     });
   });

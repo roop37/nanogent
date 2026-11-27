@@ -3,15 +3,15 @@ import type { RunEvent } from "@nanogent/core";
 import { Check, ChevronDown, ChevronUp } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Group, type Layout, Panel, Separator } from "react-resizable-panels";
 import { visiblePolling } from "@/lib/polling";
 import { costLevel, mergeEvents } from "@/lib/timeline";
 import {
   active,
+  commandDuration,
   duration,
   type EventPage,
-  formatDuration,
   modelName,
   money,
   type RunView,
@@ -42,9 +42,11 @@ const Diff = dynamic(() => import("./diff").then((module) => module.Diff), {
 });
 function verificationReason(run: RunView) {
   if (run.result?.verified) return "";
+  if (run.result?.verify?.exitCode === 0)
+    return run.result.failureReason ?? "The check passed before the run ended early.";
   if (run.result?.verify) return "The verification command failed.";
-  if (!run.spec.verifyCommand) return "No verification command was configured.";
   if (run.state === "canceled") return "The run was canceled before verification.";
+  if (!run.spec.verifyCommand) return "No verification command was configured.";
   if (active(run.state)) return "Waiting for the harness check.";
   return run.result?.failureReason || "No harness check was recorded.";
 }
@@ -81,7 +83,7 @@ function Verification({
           {verify.exitCode === null ? "Timed out or interrupted" : `Exit ${verify.exitCode}`} ·{" "}
           {verify.durationMs === undefined
             ? "Duration not recorded"
-            : formatDuration(verify.durationMs)}
+            : commandDuration(verify.durationMs)}
         </p>
       )}
       <TerminalBlock
@@ -180,13 +182,19 @@ export function LiveRun({
   const [panelOpen, setPanelOpen] = useState(true);
   const [layout, setLayout] = useState<Layout>();
   const [restored, setRestored] = useState(false);
+  const cursor = useRef(1);
   const dismiss = useCallback(() => setMessage(""), []);
   const id = initial.spec.id;
   const running = active(run.state);
   const verification = events.findLast((event) => event.type === "verify.result");
   const verified =
-    run.result?.verified ||
+    run.result?.verified ??
     (verification?.type === "verify.result" && verification.data.exitCode === 0);
+  const reason =
+    !run.result && verification?.type === "verify.result" && verification.data.exitCode !== 0
+      ? "The verification command failed."
+      : verificationReason(run);
+  const patch = run.result?.diff ?? run.diffSnapshot;
   const cost = costLevel(run.progress.costUsd, run.spec.limits.maxCostUsd);
   useEffect(() => {
     const online = () => setRetry((value) => value + 1);
@@ -250,10 +258,8 @@ export function LiveRun({
       window.removeEventListener("nanogent-cancel", open);
     };
   }, [running, canceling, run.cancelRequested]);
-  // A retry replays from the start; mergeEvents keeps existing rows stable.
   // biome-ignore lint/correctness/useExhaustiveDependencies: retry explicitly restarts the poller
   useEffect(() => {
-    let from = 1;
     async function get(path: string, signal: AbortSignal) {
       const response = await fetch(path, { cache: "no-store", signal });
       if (response.status === 401) {
@@ -267,13 +273,13 @@ export function LiveRun({
     return visiblePolling(
       async (signal) => {
         const { run: latest }: { run: RunView } = await get(`/api/runs/${id}`, signal);
-        const page: EventPage = await get(`/api/runs/${id}/events?from=${from}`, signal);
+        const page: EventPage = await get(`/api/runs/${id}/events?from=${cursor.current}`, signal);
         if (signal.aborted) return null;
         setRun(latest);
         setError("");
         setLoaded(true);
         setEvents((prior) => mergeEvents(prior, page.events));
-        from = page.nextSeq;
+        cursor.current = page.nextSeq;
         return page.hasMore ? 0 : active(latest.state) ? 1500 : null;
       },
       (cause) => {
@@ -315,8 +321,8 @@ export function LiveRun({
   const changes = (
     <section className="changes-pane" aria-label="Changes">
       <h2 className="pane-title">Changes</h2>
-      {run.result?.diff ? (
-        <Diff diff={run.result.diff} notify={setMessage} />
+      {patch ? (
+        <Diff diff={patch} notify={setMessage} />
       ) : (
         <div className="pane-empty">
           <FileEmpty />
@@ -347,7 +353,7 @@ export function LiveRun({
           </span>
           <span
             className={`verification-badge ${verified ? "text-success" : "text-muted-foreground"}`}
-            title={verified ? "The harness check passed." : verificationReason(run)}
+            title={verified ? "The harness check passed." : reason}
             aria-live="polite"
           >
             {verified ? (
@@ -365,6 +371,7 @@ export function LiveRun({
           <CopyButton text={id} label="Copy run id" notify={setMessage} />
           {running && (
             <Button
+              className="cancel-run"
               variant="outline"
               disabled={canceling || run.cancelRequested}
               title="Cancel run (⌘ / Ctrl .)"
@@ -374,7 +381,7 @@ export function LiveRun({
             </Button>
           )}
         </div>
-        {!verified && <p className="verification-reason">{verificationReason(run)}</p>}
+        {!verified && <p className="verification-reason">{reason}</p>}
       </header>
       <dl className="run-metrics">
         <div>
@@ -449,34 +456,35 @@ export function LiveRun({
       ) : (
         <>
           <div className="run-panes">
-            {run.result?.diff ? (
-              <Group
-                key={restored ? "restored" : "initial"}
-                defaultLayout={layout}
-                orientation="horizontal"
-                onLayoutChanged={(value) => {
-                  if (!restored) return;
-                  try {
-                    localStorage.setItem("nanogent-run-panes", JSON.stringify(value));
-                  } catch {
-                    /* Resizing still works without storage. */
-                  }
-                }}
-              >
-                <Panel id="activity" minSize="20%" defaultSize="45%">
-                  {activity}
-                </Panel>
-                <Separator className="pane-separator" aria-label="Resize activity and changes" />
-                <Panel id="changes" minSize="20%" defaultSize="55%">
-                  {changes}
-                </Panel>
-              </Group>
-            ) : (
-              activity
-            )}
+            <Group
+              key={restored ? "restored" : "initial"}
+              defaultLayout={patch ? layout : undefined}
+              orientation="horizontal"
+              onLayoutChanged={(value) => {
+                if (!restored || !patch) return;
+                try {
+                  localStorage.setItem("nanogent-run-panes", JSON.stringify(value));
+                } catch {
+                  /* Resizing still works without storage. */
+                }
+              }}
+            >
+              <Panel id="activity" minSize="20%" defaultSize="45%">
+                {activity}
+              </Panel>
+              {patch && (
+                <>
+                  <Separator className="pane-separator" aria-label="Resize activity and changes" />
+                  <Panel id="changes" minSize="20%" defaultSize="55%">
+                    {changes}
+                  </Panel>
+                </>
+              )}
+            </Group>
           </div>
           <Tabs
             defaultValue="verification"
+            onValueChange={() => setPanelOpen(true)}
             className={`run-bottom-panel ${panelOpen ? "is-open" : ""}`}
           >
             <div className="panel-heading">

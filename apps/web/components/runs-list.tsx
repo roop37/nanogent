@@ -8,7 +8,7 @@ import { Status } from "./status";
 import { Button } from "./ui/button";
 import { Kbd } from "./ui/primitives";
 export function RunsList() {
-  const { runs, clock, connected } = useRuns();
+  const { runs, clock, connected, online } = useRuns();
   return (
     <div className="mx-auto max-w-6xl">
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
@@ -27,9 +27,11 @@ export function RunsList() {
         </Button>
       </div>
       {!connected && (
-        <output className="mb-4 text-warning">Could not refresh runs. Retrying shortly.</output>
+        <output className="mb-4 text-warning">
+          {online ? "Could not refresh runs. Retrying shortly." : "You are offline."}
+        </output>
       )}
-      {runs.length === 0 ? (
+      {runs.length === 0 && !connected ? null : runs.length === 0 ? (
         <div className="flex min-h-[50vh] flex-col items-center justify-center text-center">
           <Terminal size={40} className="mb-6 text-muted-foreground" />
           <h2 className="text-xl font-medium">Start with a task</h2>
@@ -49,7 +51,15 @@ export function RunsList() {
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full min-w-[850px] table-fixed text-left text-xs">
+            <colgroup>
+              <col className="w-[100px]" />
+              <col />
+              <col className="w-[195px]" />
+              <col className="w-[115px]" />
+              <col className="w-[96px]" />
+              <col className="w-[95px]" />
+            </colgroup>
             <thead className="border-y text-muted-foreground">
               <tr>
                 {["State", "Task", "Repository", "Started", "Duration", "Cost"].map((label) => (
@@ -65,7 +75,7 @@ export function RunsList() {
                   <td className="px-3 py-4">
                     <Status state={run.state} verified={run.result?.verified} />
                   </td>
-                  <td className="max-w-[320px] min-w-[180px] px-3 py-4">
+                  <td className="px-3 py-4">
                     <Link className="group flex items-center gap-3" href={`/runs/${run.spec.id}`}>
                       <span className="truncate text-[13px]">{run.spec.task.split("\n")[0]}</span>
                       <ArrowUpRight
@@ -74,7 +84,9 @@ export function RunsList() {
                       />
                     </Link>
                   </td>
-                  <td className="whitespace-nowrap px-3 text-muted-foreground">{repoName(run)}</td>
+                  <td className="truncate px-3 text-muted-foreground" title={repoName(run)}>
+                    {repoName(run)}
+                  </td>
                   <td className="whitespace-nowrap px-3 text-muted-foreground">
                     <time dateTime={run.createdAt}>{relativeTime(run.createdAt, clock)}</time>
                   </td>

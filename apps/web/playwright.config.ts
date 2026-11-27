@@ -8,7 +8,8 @@ export default defineConfig({
   timeout: 60000,
   use: { baseURL: "http://127.0.0.1:3199", ...devices["Desktop Chrome"] },
   webServer: {
-    command: "pnpm exec next dev --webpack --hostname 127.0.0.1 --port 3199",
+    command:
+      "pnpm --filter @nanogent/config... --filter @nanogent/controller... build && pnpm exec next dev --webpack --hostname 127.0.0.1 --port 3199",
     url: "http://127.0.0.1:3199/sign-in",
     reuseExistingServer: false,
     timeout: 120000,

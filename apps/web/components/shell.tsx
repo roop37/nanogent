@@ -25,7 +25,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { authClient } from "@/lib/auth-client";
 import { visiblePolling } from "@/lib/polling";
 import { active, modelName, money, type RunView } from "@/lib/types";
 import {
@@ -50,21 +49,30 @@ type Config = { dailyCap: number; maxCost: number; models: string[]; environment
 const RunsContext = createContext<{
   runs: RunView[];
   clock: number;
-  allowance: Allowance;
+  allowance: Allowance | null;
   connected: boolean;
-}>({ runs: [], clock: 0, allowance: { activeCount: 0, charged: 0 }, connected: true });
+  online: boolean;
+}>({
+  runs: [],
+  clock: 0,
+  allowance: null,
+  connected: true,
+  online: true,
+});
 export const useRuns = () => useContext(RunsContext);
 export function Shell({
   children,
   initial,
   initialAllowance,
+  initialConnected,
   initialTime,
   user,
   config,
 }: {
   children: ReactNode;
   initial: RunView[];
-  initialAllowance: Allowance;
+  initialAllowance: Allowance | null;
+  initialConnected: boolean;
   initialTime: number;
   user: { name: string; email: string };
   config: Config;
@@ -73,7 +81,7 @@ export function Shell({
   const pathname = usePathname();
   const [runs, setRuns] = useState(initial);
   const [allowance, setAllowance] = useState(initialAllowance);
-  const [connected, setConnected] = useState(true);
+  const [connected, setConnected] = useState(initialConnected);
   const [online, setOnline] = useState(true);
   const [retry, setRetry] = useState(0);
   const [clock, setClock] = useState(initialTime);
@@ -199,6 +207,7 @@ export function Shell({
   async function signOut() {
     setPalette(false);
     try {
+      const { authClient } = await import("@/lib/auth-client");
       const result = await authClient.signOut();
       if (result.error) throw new Error();
       window.location.assign("/sign-in");
@@ -298,20 +307,20 @@ export function Shell({
             links[next]?.focus();
           }}
         >
-          {runs.length === 0 ? (
+          {runs.length === 0 && connected ? (
             <div className="px-4 text-muted-foreground">
               <p className="mb-3">Your runs will appear here.</p>
               <Button variant="ghost" onClick={() => navigate("/runs/new")}>
                 New run
               </Button>
             </div>
-          ) : (
+          ) : runs.length > 0 ? (
             <>
               {renderGroup("Active", groups.active)}
               {renderGroup("Today", groups.today)}
               {renderGroup("Earlier", groups.earlier)}
             </>
-          )}
+          ) : null}
         </nav>
         <button
           type="button"
@@ -331,7 +340,6 @@ export function Shell({
     );
   }
   function renderGroup(title: string, list: RunView[]) {
-    if (!list.length && title !== "Active") return null;
     return (
       <details aria-label={title} open>
         <summary className="flex h-7 items-center gap-1 px-3 text-[11px] text-muted-foreground">
@@ -339,7 +347,7 @@ export function Shell({
           {title}
           <span className="ml-auto font-mono">{list.length}</span>
         </summary>
-        {!list.length && <p className="px-5 py-2 text-xs text-muted-foreground">No active runs</p>}
+        {!list.length && <p className="px-5 py-2 text-xs text-muted-foreground">No runs</p>}
         {list.map((run) => (
           <Link
             data-run
@@ -391,7 +399,7 @@ export function Shell({
     </Popover>
   );
   return (
-    <RunsContext.Provider value={{ runs, clock, allowance, connected }}>
+    <RunsContext.Provider value={{ runs, clock, allowance, connected, online }}>
       <div className="workspace">
         <header className="mobile-topbar">
           <button type="button" aria-label="Open runs menu" onClick={() => setDrawer(true)}>
@@ -545,20 +553,22 @@ export function Shell({
             title={connected ? "Last sync succeeded" : "Retrying connection"}
           >
             {connected ? <Wifi size={12} /> : <WifiOff size={12} />}
-            {connected ? "Connected" : "Reconnecting"}
+            {connected ? "Connected" : online ? "Reconnecting" : "Offline"}
           </span>
-          <span className="desktop-status">{allowance.activeCount} active</span>
+          {allowance && <span className="desktop-status">{allowance.activeCount} active</span>}
           <span className="desktop-status ml-auto" />
           <Popover
             trigger={
               <button type="button" className="font-mono">
-                ${allowance.charged.toFixed(2)} / ${config.dailyCap.toFixed(2)} today
+                {allowance
+                  ? `$${allowance.charged.toFixed(2)} / $${config.dailyCap.toFixed(2)} today`
+                  : "Allowance unavailable"}
               </button>
             }
           >
             <p className="mb-2 font-medium">Daily allowance</p>
             <p className="text-xs text-muted-foreground">
-              Spent and reserved: {money(allowance.charged)}
+              Spent and reserved: {allowance ? money(allowance.charged) : "—"}
               <br />
               Daily cap: {money(config.dailyCap)}
               <br />

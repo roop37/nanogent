@@ -5,17 +5,19 @@ import { settings } from "@/lib/server/settings";
 export const dynamic = "force-dynamic";
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await pageUser();
+  const config = settings();
   const data = await withBackend(async (backend) => ({
     runs: await backend.list(user.id),
     allowance: await backend.allowance(user.id),
-  }));
+  })).catch(() => null);
   return (
     <Shell
       user={user}
-      initial={data.runs}
-      initialAllowance={data.allowance}
+      initial={data?.runs ?? []}
+      initialAllowance={data?.allowance ?? null}
+      initialConnected={!!data}
       initialTime={Date.now()}
-      config={settings()}
+      config={config}
     >
       {children}
     </Shell>
