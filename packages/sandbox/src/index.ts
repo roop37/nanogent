@@ -159,8 +159,15 @@ export class DockerSandboxProvider implements SandboxProvider {
         }),
       );
       if (spec.draft) {
-        for (const file of DraftSnapshotSchema.parse(spec.draft).files)
-          await sandbox.writeFile(file.path, file.text, signal);
+        for (const { path, text } of DraftSnapshotSchema.parse(spec.draft).files) {
+          if (text === null) await sandbox.removeFile(path, signal);
+          else {
+            await sandbox.writeFile(path, text, signal);
+            requireSuccess(
+              await sandbox.exec(`git --literal-pathspecs add -f -- ${quote(path)}`, options),
+            );
+          }
+        }
       }
       requireSuccess(
         await sandbox.exec(
@@ -313,6 +320,9 @@ export class DockerSandbox implements Sandbox {
   }
   async writeFile(path: string, content: string, signal?: AbortSignal): Promise<void> {
     await this.file({ op: "write", path, content }, 3000, signal);
+  }
+  async removeFile(path: string, signal?: AbortSignal): Promise<void> {
+    await this.file({ op: "remove", path }, 3000, signal);
   }
   private async file(request: object, maxBytes: number, signal?: AbortSignal): Promise<string> {
     const data = Buffer.from(JSON.stringify(request)).toString("base64");

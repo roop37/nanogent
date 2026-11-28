@@ -11,13 +11,13 @@ import { testMode } from "./settings";
 
 type Connection = typeof schema.githubConnections.$inferSelect;
 type Access = { login: string; token: string };
-type DraftFileEdit = { path: string; text: string | null };
+type DraftFileEdit = { path: string; text: string | null; deleted?: true };
 type DraftEdit = DraftFileEdit & { version: number };
 
 function editDraft(draft: DraftSnapshot, edits: readonly DraftFileEdit[]) {
   const files = new Map(draft.files.map(({ path, text }) => [path, text]));
-  for (const { path, text } of edits) {
-    if (text === null) files.delete(path);
+  for (const { path, text, deleted } of edits) {
+    if (text === null && !deleted) files.delete(path);
     else files.set(path, text);
   }
   const parsed = DraftFilesSchema.safeParse([...files].map(([path, text]) => ({ path, text })));

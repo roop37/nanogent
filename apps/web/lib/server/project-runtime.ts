@@ -69,6 +69,20 @@ export function projectGitHub(access: string) {
   return github(access, testMode() ? fixtureFetch : fetch);
 }
 
+export async function sessionSource(
+  client: ReturnType<typeof projectGitHub>,
+  repo: string,
+  commit: string,
+  path: string,
+) {
+  try {
+    return await client.content(repo, commit, path);
+  } catch (error) {
+    if (error instanceof HttpError && error.status === 404) return null;
+    throw error;
+  }
+}
+
 export async function projectConnection(owner: string, config: GitHubConfig) {
   const access = await withProjectStore((store) => store.access(owner, config));
   if (!access) throw new HttpError(401, "Connect GitHub to continue.");

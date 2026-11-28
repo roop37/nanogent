@@ -52,6 +52,8 @@ pnpm --filter @nanogent/worker... build
 
 Restart `nanogent-runner` through systemd and check its local health endpoint. Use the configured port if it differs
 from 8787. Restarting lets active runs drain within the service timeout and loads the updated system prompt.
+Run `pnpm sandbox:build` before restarting a Docker runner when the sandbox image changes. Draft file deletion
+requires the updated image.
 
 ```sh
 sudo systemctl restart nanogent-runner

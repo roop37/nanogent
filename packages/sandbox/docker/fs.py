@@ -45,7 +45,16 @@ try:
                 raise ValueError('Only regular files and directories are readable')
         finally:
             os.close(target)
-    else:
+    elif request['op'] == 'remove':
+        try:
+            mode = os.stat(name, dir_fd=fd, follow_symlinks=False).st_mode
+        except FileNotFoundError:
+            pass
+        else:
+            if not stat.S_ISREG(mode):
+                raise ValueError('Only regular files can be removed')
+            os.unlink(name, dir_fd=fd)
+    elif request['op'] == 'write':
         target = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o644, dir_fd=fd)
         try:
             if not stat.S_ISREG(os.fstat(target).st_mode):
@@ -56,5 +65,7 @@ try:
                 data = data[os.write(target, data):]
         finally:
             os.close(target)
+    else:
+        raise ValueError('Unknown file operation')
 finally:
     os.close(fd)

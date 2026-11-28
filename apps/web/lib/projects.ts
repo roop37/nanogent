@@ -51,3 +51,8 @@ export const sessionName = z
   .max(100)
   .refine((name) => !/\p{Cc}/u.test(name));
 export type ProjectSession = ProjectPin & { id: string; projectId: string; name: string };
+
+export function parentPath(path: string) {
+  const separator = path.lastIndexOf("/");
+  return separator < 0 ? "" : path.slice(0, separator);
+}

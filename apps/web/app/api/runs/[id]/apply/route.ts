@@ -2,7 +2,7 @@ import { DraftVersionSchema, RunIdSchema } from "@nanogent/core";
 import { getSession } from "@/lib/server/auth";
 import { patchDraft } from "@/lib/server/draft-patch";
 import { HttpError, requireSameOrigin, requireUser } from "@/lib/server/guard";
-import { authorizedProject, projectConfig } from "@/lib/server/project-runtime";
+import { authorizedProject, projectConfig, sessionSource } from "@/lib/server/project-runtime";
 import { withProjectStore } from "@/lib/server/project-store";
 import { withBackend } from "@/lib/server/runtime";
 
@@ -38,14 +38,12 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     );
     if (!session || !draft) throw new HttpError(404, "Session not found.");
     if (draft.version !== version.data) throw conflict();
-    const edits = await patchDraft(run.result.diff, draft, async (path) => {
-      try {
-        return (await client.content(repo.full_name, session.commitSha, path)).text;
-      } catch (error) {
-        if (error instanceof HttpError && error.status === 404) return null;
-        throw error;
-      }
-    });
+    const edits = await patchDraft(
+      run.result.diff,
+      draft,
+      async (path) =>
+        (await sessionSource(client, repo.full_name, session.commitSha, path))?.text ?? null,
+    );
     const saved = await withProjectStore((store) =>
       store.saveDraftFiles(user.id, projectId, sessionId, version.data, edits),
     );

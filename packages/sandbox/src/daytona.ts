@@ -165,7 +165,15 @@ export class DaytonaSandboxProvider implements SandboxProvider {
         });
       }
       if (spec.draft) {
-        for (const file of spec.draft.files) await sandbox.writeFile(file.path, file.text, signal);
+        for (const { path, text } of spec.draft.files) {
+          if (text === null) await sandbox.removeFile(path, signal);
+          else {
+            await sandbox.writeFile(path, text, signal);
+            success(
+              await sandbox.exec(`git --literal-pathspecs add -f -- ${quote(path)}`, options),
+            );
+          }
+        }
       }
       success(
         await sandbox.exec(
@@ -418,6 +426,9 @@ export class DaytonaSandbox implements Sandbox {
   }
   async writeFile(path: string, content: string, signal?: AbortSignal) {
     await this.file({ op: "write", path, content }, 3000, signal);
+  }
+  async removeFile(path: string, signal?: AbortSignal) {
+    await this.file({ op: "remove", path }, 3000, signal);
   }
   async diff(options: { maxBytes: number; signal?: AbortSignal }) {
     return success(

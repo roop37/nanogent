@@ -172,6 +172,10 @@ On a completed run, choose **Apply to draft** in **Changes** to save the reviewe
 If the draft has advanced, open the session files and use **Download .patch** to compare the changes manually.
 Update the runner to generate full Git blob IDs for new patches.
 
+Use **New file** in an existing folder, or **Rename** and **Delete** when viewing an editable file.
+**Restore** on a tracked deletion brings back the pinned GitHub version. Renames move saved text within the
+same folder. The runner creates the destination as a regular file.
+
 Apply migration `0005_session_drafts` and update the runner before promoting the matching web deployment.
 
 See [GitHub App registration](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app)

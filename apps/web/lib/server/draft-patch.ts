@@ -83,16 +83,18 @@ export async function patchDraft(
   return Promise.all(
     files.map(async ({ file, path, before, after }) => {
       const base = await original(path);
-      if (base === null || !DraftTextSchema.safeParse(base).success)
-        throw new HttpError(
-          422,
-          "The patch contains a file that cannot be edited in a session draft.",
-        );
-      const current = saved.get(path) ?? base;
       const conflict = () =>
         new HttpError(
           409,
           "The patch does not match the saved draft. Download it to review the differences.",
+        );
+      const overlay = saved.get(path);
+      if (overlay === null) throw conflict();
+      const current = overlay ?? base;
+      if (current === null || !DraftTextSchema.safeParse(current).success)
+        throw new HttpError(
+          422,
+          "The patch contains a file that cannot be edited in a session draft.",
         );
       if (blobHash(current) !== before) throw conflict();
       const text = applyPatch(current, file, { fuzzFactor: 0, autoConvertLineEndings: false });

@@ -236,5 +236,22 @@ describe.skipIf(!dockerAvailable)("web Postgres admission", () => {
       { spec: next, sessionId: named.id },
       { spec: initial, sessionId: named.id },
     ]);
+    expect(
+      await store.saveDraftFiles(...draftId, 2, [
+        { path: "README.md", text: null, deleted: true },
+        { path: "GUIDE.md", text: "Draft two\n" },
+      ]),
+    ).toBe(3);
+    expect(await store.draft(...draftId)).toEqual({
+      version: 3,
+      files: [
+        { path: "README.md", text: null },
+        { path: "GUIDE.md", text: "Draft two\n" },
+      ],
+    });
+    expect(await pg.store.draft(next.id)).toEqual({
+      version: 2,
+      files: [{ path: "README.md", text: "Draft two\n" }],
+    });
   });
 });

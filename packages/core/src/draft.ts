@@ -14,6 +14,7 @@ export const DraftPathSchema = z
         .every(
           (part) =>
             part &&
+            bytes(part) <= 255 &&
             part !== "." &&
             part !== ".." &&
             ![".git", ".ssh", ".aws", ".config", ".nanogent", "node_modules"].includes(
@@ -35,14 +36,14 @@ export const DraftFilesSchema = z
   .array(
     z.strictObject({
       path: DraftPathSchema,
-      text: DraftTextSchema,
+      text: DraftTextSchema.nullable(),
     }),
   )
   .max(20)
   .refine(
     (files) =>
-      files.reduce((total, file) => total + bytes(file.text), 0) <= 256 * 1024 &&
-      new Set(files.map((file) => file.path)).size === files.length,
+      files.reduce((total, file) => total + (file.text === null ? 0 : bytes(file.text)), 0) <=
+        256 * 1024 && new Set(files.map((file) => file.path)).size === files.length,
   );
 export const DraftSnapshotSchema = z.strictObject({
   version: DraftVersionSchema,

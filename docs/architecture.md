@@ -151,3 +151,7 @@ event payloads and browser run-list responses.
 Applying a reviewed patch checks ownership, GitHub access and the captured draft version again. The server resolves
 existing text files at the session pin, checks the before and after Git blob IDs, and saves all edits in one versioned
 update. A version mismatch or unsupported patch leaves the draft and original run result available for manual review.
+
+A draft can also store new text files and deletion markers. A same-folder rename saves its destination and
+removes or hides the source in one versioned update. Restoring a tracked deletion removes its marker and exposes
+the pinned file. Sandboxes apply both replacements and confined deletions before recording the run baseline.

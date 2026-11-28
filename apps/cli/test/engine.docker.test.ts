@@ -107,7 +107,14 @@ it.skipIf(!available)(
     });
     const sandbox = await provider.create({
       ...spec,
-      draft: { version: 1, files: [{ path: "index.js", text: "export const value = 'draft';\n" }] },
+      draft: {
+        version: 1,
+        files: [
+          { path: "index.js", text: "export const value = 'draft';\n" },
+          { path: "index.test.js", text: null },
+          { path: "renamed.test.js", text: "Draft file contents\n" },
+        ],
+      },
     });
     const options = { timeoutSec: 5, maxOutputBytes: 2000 };
     try {
@@ -120,6 +127,10 @@ it.skipIf(!available)(
       expect(inspect.stdout).toContain('"ReadonlyRootfs":true');
       expect(inspect.stdout).toContain('"CapDrop":["ALL"]');
       expect(inspect.stdout.trim()).toMatch(/\|\{\}$/);
+      await expect(sandbox.readFile("index.test.js", { maxBytes: 2000 })).rejects.toThrow();
+      expect(await sandbox.readFile("renamed.test.js", { maxBytes: 2000 })).toBe(
+        "Draft file contents\n",
+      );
       expect(await sandbox.readFile("index.js", { maxBytes: 2000 })).toBe(
         "export const value = 'draft';\n",
       );
@@ -152,6 +163,7 @@ it.skipIf(!available)(
       ]) {
         await expect(sandbox.readFile(path, { maxBytes: 2000 })).rejects.toThrow();
         await expect(sandbox.writeFile(path, "bad")).rejects.toThrow();
+        await expect(sandbox.removeFile(path)).rejects.toThrow();
       }
       await sandbox.writeFile("/workspace/new.txt", "new file");
       await sandbox.writeFile("index.js", "export const value = 'updated';\n");

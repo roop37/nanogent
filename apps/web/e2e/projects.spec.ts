@@ -244,6 +244,35 @@ test("reopens named sessions and sends follow-ups with their own history and pin
   const duplicate = await context.request.post("/api/runs", { data: otherTask });
   expect(duplicate.status()).toBe(409);
 
+  const filesPath = `${first}?file=`;
+  await page.goto(filesPath);
+  await page.getByRole("button", { name: "New file", exact: true }).click();
+  await page.getByLabel("Filename", { exact: true }).fill("notes.txt");
+  await page.getByRole("button", { name: "Create file", exact: true }).click();
+  const notes = page.getByRole("textbox", { name: "notes.txt", exact: true });
+  await notes.fill("Keep this draft text.\n");
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(page.getByText("Saved draft version 4.")).toBeVisible();
+  await page.getByRole("button", { name: "Rename", exact: true }).click();
+  await page.getByLabel("Filename", { exact: true }).fill("guide.txt");
+  await page.getByRole("button", { name: "Save name", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "guide.txt", exact: true })).toHaveValue(
+    "Keep this draft text.\n",
+  );
+  await page.goto(filesPath);
+  await expect(page.getByRole("link", { name: /guide\.txt/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /notes\.txt/ })).toHaveCount(0);
+  await page.getByRole("link", { name: /README\.md/ }).click();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await page.getByRole("button", { name: "Confirm delete", exact: true }).click();
+  await expect(page.getByRole("link", { name: /README\.md.*Deleted/ })).toBeVisible();
+  await page.getByRole("link", { name: /README\.md.*Deleted/ }).click();
+  await page.getByRole("button", { name: "Restore", exact: true }).click();
+  await page.getByRole("button", { name: "Confirm restore", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "README.md", exact: true })).toHaveValue(
+    /pinned commit/,
+  );
+
   await context.addCookies([
     { name: "nanogent-test-session", value: "empty", domain: "127.0.0.1", path: "/" },
   ]);
