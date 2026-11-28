@@ -90,7 +90,7 @@ it("sets lifecycle limits, clones without hooks/submodules, cuts network and rec
   expect(sandbox.baseline).toBe("a".repeat(40));
   await sandbox.diff({ maxBytes: 1000 });
   expect(commands.at(-1)).toContain("add -N .");
-  expect(commands.at(-1)).toContain("--no-ext-diff --no-textconv --binary");
+  expect(commands.at(-1)).toContain("--no-ext-diff --no-textconv --full-index --binary");
   await sandbox.destroy();
   await sandbox.destroy();
   expect(remote.delete).toHaveBeenCalledTimes(1);

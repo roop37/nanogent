@@ -168,6 +168,10 @@ Saving persists edits for that session and checks for concurrent changes. Each r
 at submission. Setup commands run against the pinned checkout before draft edits are applied. The Changes pane
 shows the run's draft version and flags a newer draft.
 
+On a completed run, choose **Apply to draft** in **Changes** to save the reviewed edits to existing text files.
+If the draft has advanced, open the session files and use **Download .patch** to compare the changes manually.
+Update the runner to generate full Git blob IDs for new patches.
+
 Apply migration `0005_session_drafts` and update the runner before promoting the matching web deployment.
 
 See [GitHub App registration](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app)

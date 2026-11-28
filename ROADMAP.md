@@ -11,6 +11,7 @@
 - Start multiple independent runs from one project. Choose and pin a branch for file browsing and future runs.
 - Open named project sessions in the header, reopen saved conversations and continue from recent tasks and results.
 - Edit existing UTF-8 files in a session draft. Runs snapshot saved edits and show the draft version in patch review.
+- Apply reviewed changes to existing text files. Preserve the draft and downloadable patch when versions conflict.
 
 **Next**
 - Finish hosted verification with a verified patch, reload, cancellation, account isolation and 10 concurrent runs.
@@ -19,7 +20,7 @@
 
 **Repository workspace**
 - Verify project branch selection on the deployed app.
-- Apply the reviewed patch to a session draft. Show conflicts and keep both versions when the draft changed.
+- Add file creation, deletion and renames to drafts. Add in-browser conflict resolution.
 - Pull remote changes with conflict handling. Commit reviewed changes to a work branch, and require an explicit user
   action to push it or open a PR. Keep GitHub credentials on the server.
 

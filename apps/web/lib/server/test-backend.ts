@@ -1,4 +1,5 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import type { RunEvent, RunEventInput, RunSpec } from "@nanogent/core";
 import { active, type RunView } from "../types";
 import type { Backend } from "./api";
@@ -16,6 +17,25 @@ function emit(entry: Entry, input: RunEventInput) {
     ts: new Date().toISOString(),
   } as RunEvent);
   entry.run.updatedAt = new Date().toISOString();
+}
+function documentationPatch() {
+  const hash = (text: string) =>
+    createHash("sha1")
+      .update(`blob ${Buffer.byteLength(text)}\0${text}`)
+      .digest("hex");
+  const previous = "# Draft documentation\nSave this across reloads.\n";
+  const next = "# Draft documentation\nReady to review.\n";
+  return [
+    "diff --git a/README.md b/README.md",
+    `index ${hash(previous)}..${hash(next)} 100644`,
+    "--- a/README.md",
+    "+++ b/README.md",
+    "@@ -1,2 +1,2 @@",
+    " # Draft documentation",
+    "-Save this across reloads.",
+    "+Ready to review.",
+    "",
+  ].join("\n");
 }
 function advance(entry: Entry, from: number) {
   if (!entry.scripted || !active(entry.run.state)) return;
@@ -50,7 +70,10 @@ function advance(entry: Entry, from: number) {
   const result = {
     status: "completed" as const,
     summary: "Fixed the addition function.",
-    diff: "diff --git a/calc.js b/calc.js\n--- a/calc.js\n+++ b/calc.js\n@@ -1 +1 @@\n-export const add = (a, b) => a - b;\n+export const add = (a, b) => a + b;\n",
+    diff:
+      entry.run.sessionId && entry.run.draftVersion === 1
+        ? documentationPatch()
+        : "diff --git a/calc.js b/calc.js\n--- a/calc.js\n+++ b/calc.js\n@@ -1 +1 @@\n-export const add = (a, b) => a - b;\n+export const add = (a, b) => a + b;\n",
     verify: {
       command: entry.run.spec.verifyCommand ?? "npm test",
       exitCode: 0,

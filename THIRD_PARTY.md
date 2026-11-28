@@ -28,6 +28,7 @@ Direct dependencies are pinned; `pnpm-lock.yaml` has the full graph. All are per
 | `class-variance-authority` | Apache-2.0 | Component variants |
 | `clsx`, `tailwind-merge` | MIT | Conditional Tailwind classes |
 | `@playwright/test` | Apache-2.0 | Local browser smoke tests |
+| `diff` | BSD-3-Clause | Parsing and applying reviewed text patches |
 
 The web button, input, textarea, badge and card components are adapted from shadcn/ui's MIT-licensed New York registry.
 Its license is included in `apps/web/components/ui/LICENSE`.

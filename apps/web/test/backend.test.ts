@@ -215,6 +215,16 @@ describe.skipIf(!dockerAvailable)("web Postgres admission", () => {
       draftVersion: 1,
       draftChanged: true,
     });
+    expect(
+      await store.saveDraftFiles(...draftId, 1, [
+        { path: "README.md", text: "Old patch" },
+        { path: "docs.md", text: "Old addition" },
+      ]),
+    ).toBeUndefined();
+    expect(await store.draft(...draftId)).toEqual({
+      version: 2,
+      files: [{ path: "README.md", text: "Draft two\n" }],
+    });
     await expect(backend.submit(spec(), owner, saved.id, named.id)).rejects.toThrow();
     await expect(backend.submit(spec(), other, saved.id, named.id)).rejects.toThrow(
       "Session not found",

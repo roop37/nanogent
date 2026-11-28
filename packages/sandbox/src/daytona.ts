@@ -422,7 +422,7 @@ export class DaytonaSandbox implements Sandbox {
   async diff(options: { maxBytes: number; signal?: AbortSignal }) {
     return success(
       await this.exec(
-        `git -c core.hooksPath=/dev/null add -N . && git -c core.hooksPath=/dev/null diff --no-ext-diff --no-textconv --binary ${quote(this.baseline)} --`,
+        `git -c core.hooksPath=/dev/null add -N . && git -c core.hooksPath=/dev/null diff --no-ext-diff --no-textconv --full-index --binary ${quote(this.baseline)} --`,
         {
           timeoutSec: this.timeoutSec,
           maxOutputBytes: options.maxBytes,

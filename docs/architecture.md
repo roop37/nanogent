@@ -147,3 +147,7 @@ writing. Admission copies the draft to a run snapshot in the same transaction th
 The runner applies it after setup and network isolation, then records the workspace baseline for patch review.
 The dashboard shows the snapshot version and whether the session has advanced. Snapshots stay outside run specs,
 event payloads and browser run-list responses.
+
+Applying a reviewed patch checks ownership, GitHub access and the captured draft version again. The server resolves
+existing text files at the session pin, checks the before and after Git blob IDs, and saves all edits in one versioned
+update. A version mismatch or unsupported patch leaves the draft and original run result available for manual review.

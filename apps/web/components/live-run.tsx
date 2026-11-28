@@ -185,6 +185,9 @@ export function LiveRun({
   const [layout, setLayout] = useState<Layout>();
   const [restored, setRestored] = useState(false);
   const [showActivity, setShowActivity] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [applyError, setApplyError] = useState("");
+  const [appliedVersion, setAppliedVersion] = useState<number>();
   const cursor = useRef(1);
   const dismiss = useCallback(() => setMessage(""), []);
   const id = initial.spec.id;
@@ -198,6 +201,10 @@ export function LiveRun({
       ? "The verification command failed."
       : verificationReason(run);
   const patch = run.result?.diff ?? run.diffSnapshot;
+  const draftHref =
+    run.projectId && run.sessionId
+      ? `/projects/${run.projectId}/sessions/${run.sessionId}?file=`
+      : undefined;
   const resultEvent = events.findLast((event) => event.type === "run.result");
   const summary = run.result?.summary ?? resultEvent?.data.summary;
   const writtenResult = run.state === "completed" && !patch && !!summary?.trim();
@@ -337,13 +344,59 @@ export function LiveRun({
   );
   const changes = (
     <section className="changes-pane" aria-label="Changes">
-      <h2 className="pane-title">Changes</h2>
+      <div className="pane-title">
+        <h2>Changes</h2>
+        {draftHref && run.state === "completed" && run.result?.diff && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={applying || run.draftChanged || appliedVersion !== undefined}
+            onClick={async () => {
+              setApplying(true);
+              setApplyError("");
+              try {
+                const response = await fetch(`/api/runs/${id}/apply`, { method: "POST" });
+                const data = await response.json();
+                if (!response.ok) {
+                  setApplyError(data.error ?? "Could not apply the patch.");
+                  if (response.status === 409) setRetry((value) => value + 1);
+                  return;
+                }
+                setAppliedVersion(data.version);
+              } catch {
+                setApplyError(
+                  "Could not confirm the update. Check the session draft before trying again.",
+                );
+              } finally {
+                setApplying(false);
+              }
+            }}
+          >
+            {applying ? "Applying…" : "Apply to draft"}
+          </Button>
+        )}
+      </div>
       {run.draftVersion !== undefined && (
         <p className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
           {run.draftVersion
             ? `Based on draft version ${run.draftVersion}.`
             : "Based on the session’s starting commit."}
-          {run.draftChanged && " The session draft has changed since this run started."}
+          {run.draftChanged &&
+            appliedVersion === undefined &&
+            " The session draft has changed since this run started."}
+          {draftHref && (run.draftChanged || appliedVersion !== undefined) && (
+            <Link href={draftHref} prefetch={false} className="ml-2 text-link">
+              Open session files
+            </Link>
+          )}
+        </p>
+      )}
+      {appliedVersion !== undefined && (
+        <output className="px-4 py-2 text-sm">Applied to draft version {appliedVersion}.</output>
+      )}
+      {applyError && (
+        <p role="alert" className="px-4 py-2 text-sm text-destructive">
+          {applyError}
         </p>
       )}
       {patch ? (

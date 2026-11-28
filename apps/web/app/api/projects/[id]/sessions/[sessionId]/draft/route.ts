@@ -1,6 +1,7 @@
-import { DraftPathSchema, DraftTextSchema, DraftVersionSchema, redact } from "@nanogent/core";
+import { DraftPathSchema, DraftTextSchema, DraftVersionSchema } from "@nanogent/core";
 import { z } from "zod";
 import { getSession } from "@/lib/server/auth";
+import { containsDraftCredential } from "@/lib/server/draft-patch";
 import { HttpError, readJson, requireSameOrigin, requireUser } from "@/lib/server/guard";
 import { authorizedProject, projectConfig } from "@/lib/server/project-runtime";
 import { withProjectStore } from "@/lib/server/project-store";
@@ -34,7 +35,7 @@ export async function PUT(
     const input = edit.safeParse(body);
     if (!input.success) throw new HttpError(400, "Choose an editable text file up to 32 KiB.");
     const { path, text, version } = input.data;
-    if (redact(text) !== text || /postgres(?:ql)?:\/\/[^\s@]*:[^\s@]+@/i.test(text))
+    if (containsDraftCredential(text))
       throw new HttpError(400, "Remove credentials before saving the draft.");
     const { client, repo } = await authorizedProject(user.id, id, config);
     if (repo.private) throw new HttpError(403, "Draft editing requires a public project.");

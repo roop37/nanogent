@@ -11,12 +11,16 @@ import { testMode } from "./settings";
 
 type Connection = typeof schema.githubConnections.$inferSelect;
 type Access = { login: string; token: string };
-type DraftEdit = { version: number; path: string; text: string | null };
+type DraftFileEdit = { path: string; text: string | null };
+type DraftEdit = DraftFileEdit & { version: number };
 
-function editDraft(draft: DraftSnapshot, edit: DraftEdit) {
-  const files = draft.files.filter(({ path }) => path !== edit.path);
-  if (edit.text !== null) files.push({ path: edit.path, text: edit.text });
-  const parsed = DraftFilesSchema.safeParse(files);
+function editDraft(draft: DraftSnapshot, edits: readonly DraftFileEdit[]) {
+  const files = new Map(draft.files.map(({ path, text }) => [path, text]));
+  for (const { path, text } of edits) {
+    if (text === null) files.delete(path);
+    else files.set(path, text);
+  }
+  const parsed = DraftFilesSchema.safeParse([...files].map(([path, text]) => ({ path, text })));
   if (!parsed.success) throw new HttpError(413, "Drafts can contain up to 20 files and 256 KiB.");
   return parsed.data;
 }
@@ -34,6 +38,13 @@ export interface ProjectStore {
     projectId: string,
     id: string,
     edit: DraftEdit,
+  ): Promise<number | undefined>;
+  saveDraftFiles(
+    owner: string,
+    projectId: string,
+    id: string,
+    version: number,
+    edits: readonly DraftFileEdit[],
   ): Promise<number | undefined>;
   createSession(
     owner: string,
@@ -104,6 +115,24 @@ export function createProjectStore(db: PostgresRunStore["db"]): ProjectStore {
         .from(schema.projectSessions)
         .where(ownedSession(owner, projectId, id))
     )[0];
+  const saveDraftFiles: ProjectStore["saveDraftFiles"] = async (
+    owner,
+    projectId,
+    id,
+    version,
+    edits,
+  ) => {
+    const draft = await readDraft(owner, projectId, id);
+    if (!draft || draft.version !== version) return undefined;
+    const [saved] = await db
+      .update(schema.projectSessions)
+      .set({ draftFiles: editDraft(draft, edits), draftVersion: version + 1 })
+      .where(
+        and(ownedSession(owner, projectId, id), eq(schema.projectSessions.draftVersion, version)),
+      )
+      .returning({ version: schema.projectSessions.draftVersion });
+    return saved?.version;
+  };
   return {
     list: (owner) =>
       db
@@ -147,21 +176,9 @@ export function createProjectStore(db: PostgresRunStore["db"]): ProjectStore {
         )
       )[0],
     draft: readDraft,
-    saveDraftFile: async (owner, projectId, id, edit) => {
-      const draft = await readDraft(owner, projectId, id);
-      if (!draft || draft.version !== edit.version) return undefined;
-      const [saved] = await db
-        .update(schema.projectSessions)
-        .set({ draftFiles: editDraft(draft, edit), draftVersion: edit.version + 1 })
-        .where(
-          and(
-            ownedSession(owner, projectId, id),
-            eq(schema.projectSessions.draftVersion, edit.version),
-          ),
-        )
-        .returning({ version: schema.projectSessions.draftVersion });
-      return saved?.version;
-    },
+    saveDraftFiles,
+    saveDraftFile: (owner, projectId, id, edit) =>
+      saveDraftFiles(owner, projectId, id, edit.version, [edit]),
     createSession: async (owner, projectId, name) => {
       const [project] = await db
         .select(fields)
@@ -230,6 +247,20 @@ function fakeProjectStore(): ProjectStore {
     projects.get(owner)?.some((project) => project.id === projectId)
       ? sessions.get(projectId)?.find((session) => session.id === id)
       : undefined;
+  const saveDraftFiles: ProjectStore["saveDraftFiles"] = async (
+    owner,
+    projectId,
+    id,
+    version,
+    edits,
+  ) => {
+    if (!findSession(owner, projectId, id)) return undefined;
+    const draft = drafts.get(id) ?? { version: 0, files: [] };
+    if (draft.version !== version) return undefined;
+    const next = version + 1;
+    drafts.set(id, { version: next, files: editDraft(draft, edits) });
+    return next;
+  };
   return {
     list: async (owner) => projects.get(owner) ?? [],
     get: async (owner, id) => projects.get(owner)?.find((project) => project.id === id),
@@ -261,14 +292,9 @@ function fakeProjectStore(): ProjectStore {
     session: async (owner, projectId, id) => findSession(owner, projectId, id),
     draft: async (owner, projectId, id) =>
       findSession(owner, projectId, id) ? (drafts.get(id) ?? { version: 0, files: [] }) : undefined,
-    saveDraftFile: async (owner, projectId, id, edit) => {
-      if (!findSession(owner, projectId, id)) return undefined;
-      const draft = drafts.get(id) ?? { version: 0, files: [] };
-      if (draft.version !== edit.version) return undefined;
-      const version = edit.version + 1;
-      drafts.set(id, { version, files: editDraft(draft, edit) });
-      return version;
-    },
+    saveDraftFiles,
+    saveDraftFile: (owner, projectId, id, edit) =>
+      saveDraftFiles(owner, projectId, id, edit.version, [edit]),
     createSession: async (owner, projectId, name) => {
       const project = projects.get(owner)?.find((candidate) => candidate.id === projectId);
       if (!project) return undefined;

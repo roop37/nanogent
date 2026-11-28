@@ -185,14 +185,19 @@ test("reopens named sessions and sends follow-ups with their own history and pin
   expect(await firstRun.json()).toMatchObject({
     run: { sessionId: first.split("/").at(-1), draftVersion: 1, draftChanged: false },
   });
-  const changedDraft = await context.request.put(`/api${first}/draft`, {
-    data: { path: "README.md", text: "Another draft version\n", version: 1 },
-  });
-  expect(changedDraft.status()).toBe(200);
+  await page.getByRole("button", { name: "Apply to draft", exact: true }).click();
+  await expect(page.getByText("Applied to draft version 2.")).toBeVisible();
+  const repeated = await context.request.post(`/api/runs/${firstRunId}/apply`);
+  expect(repeated.status()).toBe(409);
   await page.reload();
   await expect(
     page.getByText(/The session draft has changed since this run started/),
   ).toBeVisible();
+  await page.getByRole("link", { name: "Open session files", exact: true }).click();
+  await page.getByRole("link", { name: /README\.md/ }).click();
+  await expect(page.getByRole("textbox", { name: "README.md", exact: true })).toHaveValue(
+    "# Draft documentation\nReady to review.\n",
+  );
 
   const moved = await context.request.patch(`/api${projectPath}/branches`, {
     data: { branch: "feature/docs", expected: pin },
@@ -244,6 +249,7 @@ test("reopens named sessions and sends follow-ups with their own history and pin
   ]);
   const foreign = await context.request.post("/api/runs", { data: otherTask });
   expect(foreign.status()).toBe(404);
+  expect((await context.request.post(`/api/runs/${firstRunId}/apply`)).status()).toBe(404);
   const foreignDraft = await context.request.put(`/api${first}/draft`, {
     data: { path: "README.md", text: "Foreign edit", version: 2 },
   });
