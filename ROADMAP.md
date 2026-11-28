@@ -10,8 +10,8 @@
 
 **Next**
 - Finish hosted verification with a verified patch, reload, cancellation, account isolation and 10 concurrent runs.
-- Harder eval tasks (multi-step, larger repos, real dependencies) so the suite can tell changes apart; baseline
-  against mini-SWE-agent with the same model and budget.
+- Collect the first paired results from Nanogent and mini-SWE-agent on the dependency-backed baseline. Expand the
+  suite with larger, multi-step repositories so results can distinguish harness and model changes.
 
 **Repository workspace**
 - Require GitHub connection to enter the workspace. List authorized repositories, and let users import or create

@@ -41,3 +41,8 @@ Its license is included in `apps/web/components/ui/LICENSE`.
 | `react-resizable-panels` | MIT | Resizable activity and changes panes |
 | `shiki` | MIT | Lazy syntax highlighting with the Dark+ theme |
 | `@fontsource-variable/inter`, `@fontsource-variable/jetbrains-mono` | MIT packaging; SIL OFL-1.1 fonts | Self-hosted UI and code fonts |
+
+The baseline fixture `evals/baseline/slug-counter-fork` uses MIT-licensed files from
+[`sindresorhus/slugify` at `99b35c2`](https://github.com/sindresorhus/slugify/tree/99b35c2b0d6ccfad2b96ba9ce6997c6365b9a4b7).
+Its license is included with the fixture. The fixture installs `@sindresorhus/transliterate` and
+`escape-string-regexp` (MIT) and TypeScript (Apache-2.0). The CSV baseline fixture installs Papa Parse (MIT).

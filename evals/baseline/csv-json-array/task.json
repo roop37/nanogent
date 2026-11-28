@@ -1,0 +1,9 @@
+{
+  "id": "csv-json-array",
+  "title": "Add JSON array export to a CSV command-line tool",
+  "difficulty": "medium",
+  "category": "multi-file",
+  "instruction": "The CLI currently emits JSON Lines. Add an optional --format flag accepting jsonl (the default) and json. In json mode write one two-space-indented JSON array and a final newline, including [] for an empty CSV with a header. Keep the converter's existing default behavior and duplicate or malformed CSV handling. Keep cell strings unchanged, including leading zeroes, and continue skipping empty lines. Reject unknown formats before reading input, exit nonzero, and write no data on failure. Update the README and add tests for the new format.",
+  "verify": "node --test",
+  "setup": ["npm ci --ignore-scripts --no-audit --no-fund"]
+}

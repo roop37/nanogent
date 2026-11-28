@@ -1,0 +1,11 @@
+{
+  "name": "csv-json-export-fixture",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "papaparse": "5.4.1"
+  }
+}

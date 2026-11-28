@@ -17,7 +17,9 @@ import {
 import {
   type Change,
   checkTasks,
+  compareReference,
   type EvalTask,
+  evalProtocol,
   loadTasks,
   runEval,
   summarize,
@@ -75,6 +77,8 @@ export async function runCli(args: string[], deps: CliDeps = {}): Promise<number
       concurrency: { type: "string" },
       out: { type: "string" },
       check: { type: "boolean" },
+      reference: { type: "string" },
+      against: { type: "string" },
     },
   });
   const env = { ...(deps.env ?? process.env) };
@@ -120,6 +124,11 @@ export async function runCli(args: string[], deps: CliDeps = {}): Promise<number
       parsed.values.only?.split(",").map((s) => s.trim()),
     );
     const concurrency = Number(parsed.values.concurrency ?? 2);
+    if (!Number.isSafeInteger(concurrency) || concurrency < 1)
+      throw new Error("--concurrency must be a positive integer");
+    const { reference, against, check } = parsed.values;
+    if ((reference === undefined) !== (against === undefined) || (check && reference !== undefined))
+      throw new Error("Use --reference and --against together, separately from --check");
     const grade = (task: EvalTask, change: Change) => verifyHidden(task, change, provider);
     if (parsed.values.check) {
       const checks = await checkTasks(tasks, grade, concurrency);
@@ -129,12 +138,34 @@ export async function runCli(args: string[], deps: CliDeps = {}): Promise<number
         );
       return checks.every((c) => c.baselineFails && c.solutionPasses) ? 0 : 1;
     }
+    const maxCost = Number(parsed.values["max-cost"] ?? 0.5);
+    const repeat = Number(parsed.values.repeat ?? 1);
+    const protocol = await evalProtocol(tasks, {
+      model: config.model,
+      maxCostUsd: maxCost,
+      repeat,
+    });
+    if (reference !== undefined && against !== undefined) {
+      const comparison = await compareReference({
+        tasks,
+        protocol,
+        reportPath: against,
+        referenceDir: reference,
+        grade,
+      });
+      const json = `${JSON.stringify(comparison, null, 2)}\n`;
+      if (parsed.values.out) {
+        await mkdir(parsed.values.out, { recursive: true });
+        await writeFile(join(parsed.values.out, "comparison.json"), json);
+      }
+      write(json);
+      return 0;
+    }
     const startedAt = new Date().toISOString();
     const controller = new LocalController(store, new ClaudeBrain(client(deps, config)), provider);
-    const maxCost = Number(parsed.values["max-cost"] ?? 0.5);
     const attempts = await runEval({
       tasks,
-      repeat: Number(parsed.values.repeat ?? 1),
+      repeat,
       concurrency,
       grade,
       runTask: async (task) => {
@@ -170,7 +201,10 @@ export async function runCli(args: string[], deps: CliDeps = {}): Promise<number
       parsed.values.out ??
       join(config.home, "evals", `${startedAt.replaceAll(/[:.]/g, "-")}-${config.model}`);
     await mkdir(out, { recursive: true });
-    await writeFile(join(out, "report.json"), `${JSON.stringify({ report, attempts }, null, 2)}\n`);
+    await writeFile(
+      join(out, "report.json"),
+      `${JSON.stringify({ protocol, report, attempts }, null, 2)}\n`,
+    );
     const markdown = toMarkdown(report, attempts);
     await writeFile(join(out, "report.md"), markdown);
     write(parsed.values.json ? `${JSON.stringify(report)}\n` : `\n${markdown}\nSaved to ${out}\n`);

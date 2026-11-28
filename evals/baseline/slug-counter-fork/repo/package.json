@@ -1,0 +1,52 @@
+{
+  "name": "@sindresorhus/slugify",
+  "version": "4.0.1",
+  "description": "Slugify a string",
+  "license": "MIT",
+  "repository": "sindresorhus/slugify",
+  "funding": "https://github.com/sponsors/sindresorhus",
+  "author": "Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)",
+  "type": "module",
+  "exports": {
+    "types": "./index.d.ts",
+    "default": "./index.js"
+  },
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "overridable-replacements.js"
+  ],
+  "keywords": [
+    "string",
+    "slugify",
+    "slug",
+    "url",
+    "url-safe",
+    "urlify",
+    "transliterate",
+    "transliteration",
+    "deburr",
+    "unicode",
+    "ascii",
+    "text",
+    "decamelize",
+    "pretty",
+    "clean",
+    "filename",
+    "id"
+  ],
+  "dependencies": {
+    "@sindresorhus/transliterate": "^3.0.0",
+    "escape-string-regexp": "^5.0.0"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

@@ -28,10 +28,18 @@
   },
   "overrides": [
     {
-      "includes": ["evals/tasks/**"],
+      "includes": ["evals/tasks/**", "evals/baseline/**"],
       "linter": {
         "enabled": false
       }
+    },
+    {
+      "includes": [
+        "evals/baseline/slug-counter-fork/repo/**",
+        "evals/baseline/slug-counter-fork/solution/**"
+      ],
+      "formatter": { "enabled": false },
+      "assist": { "enabled": false }
     },
     {
       "includes": ["apps/web/**/*.css"],

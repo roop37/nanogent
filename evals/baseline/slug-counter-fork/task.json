@@ -1,0 +1,9 @@
+{
+  "id": "slug-counter-fork",
+  "title": "Fork a slug counter without sharing its state",
+  "difficulty": "hard",
+  "category": "multi-file",
+  "instruction": "Add fork() to the callable returned by slugifyWithCounter(). It returns a callable whose occurrence counts and previously returned slugs match the original at the moment of the fork. Subsequent conversions and reset() calls on either callable must not affect the other. The returned callable can itself be forked. Preserve the existing default behavior, collision avoidance, case-insensitivity and slug options. Update the public TypeScript declaration and document fork().",
+  "verify": "node --test && if test -f fork.hidden.ts; then ./node_modules/.bin/tsc --noEmit --strict --module NodeNext fork.hidden.ts; fi",
+  "setup": ["npm ci --ignore-scripts --no-audit --no-fund"]
+}

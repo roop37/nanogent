@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,7 +9,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   type Attempt,
   checkTasks,
+  compareReference,
   type EvalTask,
+  evalProtocol,
   loadTasks,
   prepareTree,
   runEval,
@@ -155,6 +157,57 @@ describe("runEval", () => {
       { taskId: "good", baselineFails: true, solutionPasses: true },
     ]);
   });
+});
+
+it("grades a paired reference trajectory and rejects incompatible input", async () => {
+  const tasks = await loadTasks(TASKS, ["slugify-spaces"]);
+  const [task] = tasks;
+  if (!task) throw new Error("Missing fixture");
+  const protocol = await evalProtocol(tasks, {
+    model: "claude-haiku-5-5",
+    maxCostUsd: 0.15,
+    repeat: 1,
+  });
+  const referenceDir = await temp();
+  const reportPath = join(referenceDir, "report.json");
+  const trajectoryPath = join(referenceDir, `${task.id}.1.traj.json`);
+  const patch = await solutionPatch(task);
+  await writeFile(
+    reportPath,
+    JSON.stringify({
+      protocol,
+      attempts: [{ taskId: task.id, attempt: 1, passed: false, costUsd: 0.07 }],
+    }),
+  );
+  const mini = {
+    trajectory_format: "mini-swe-agent-1.1",
+    info: {
+      mini_version: "2.0.0",
+      exit_status: "Submitted",
+      submission: patch,
+      model_stats: { instance_cost: 0.04 },
+      config: { model: { model_name: "anthropic/claude-haiku-5-5" }, agent: { cost_limit: 0.15 } },
+    },
+  };
+  await writeFile(trajectoryPath, JSON.stringify(mini));
+  const grade: Parameters<typeof compareReference>[0]["grade"] = async (submittedTask, change) => {
+    expect(submittedTask.id).toBe(task.id);
+    const dir = join(await temp(), "paired");
+    await prepareTree(submittedTask, change, dir);
+    await run("node", ["--test"], { cwd: dir });
+    return { passed: true, exitCode: 0, output: "" };
+  };
+  const options = { tasks, protocol, reportPath, referenceDir, grade };
+  expect(await compareReference(options)).toMatchObject({
+    nanogent: { attempts: 1, passed: 0, costUsd: 0.07, costPerPass: null },
+    miniSweAgent: { attempts: 1, passed: 1, successRate: 1, costUsd: 0.04, costPerPass: 0.04 },
+  });
+  await expect(
+    compareReference({ ...options, protocol: { ...protocol, suiteDigest: "0".repeat(64) } }),
+  ).rejects.toThrow("Nanogent report does not match");
+  mini.info.config.agent.cost_limit = 0.5;
+  await writeFile(trajectoryPath, JSON.stringify(mini));
+  await expect(compareReference(options)).rejects.toThrow("model or budget mismatch");
 });
 
 describe("summarize", () => {
