@@ -23,6 +23,7 @@ type Transaction = Parameters<Parameters<RunDatabase["transaction"]>[0]>[0];
 export interface StoredRun extends RunRecord {
   ownerId: string | null;
   projectId: string | null;
+  sessionId: string | null;
   cancelRequested: boolean;
 }
 const terminal = (state: RunState) => ["completed", "failed", "canceled"].includes(state);
@@ -61,10 +62,26 @@ export class PostgresRunStore implements RunStore {
   }
   async create(
     spec: RunSpec,
-    options: { ownerId?: string; projectId?: string } = {},
+    options: { ownerId?: string; projectId?: string; sessionId?: string } = {},
   ): Promise<void> {
     const valid = RunSpecSchema.parse(this.clean(RunSpecSchema.parse(spec)));
-    if (options.projectId) {
+    if (options.sessionId) {
+      const [session] =
+        options.ownerId && options.projectId
+          ? await this.db
+              .select({ id: schema.projectSessions.id })
+              .from(schema.projectSessions)
+              .innerJoin(schema.projects, eq(schema.projects.id, schema.projectSessions.projectId))
+              .where(
+                and(
+                  eq(schema.projectSessions.id, options.sessionId),
+                  eq(schema.projects.id, options.projectId),
+                  eq(schema.projects.ownerId, options.ownerId),
+                ),
+              )
+          : [];
+      if (!session) throw new Error("Session not found");
+    } else if (options.projectId) {
       const [project] = options.ownerId
         ? await this.db
             .select({ id: schema.projects.id })
@@ -83,6 +100,7 @@ export class PostgresRunStore implements RunStore {
       spec: valid,
       ownerId: options.ownerId ?? null,
       projectId: options.projectId ?? null,
+      sessionId: options.sessionId ?? null,
     });
   }
   private async locked(tx: Transaction, runId: string) {
@@ -197,6 +215,7 @@ export class PostgresRunStore implements RunStore {
       ...(row.result ? { result: RunResultSchema.parse(row.result) } : {}),
       ownerId: row.ownerId,
       projectId: row.projectId,
+      sessionId: row.sessionId,
       cancelRequested: row.cancelRequested,
     };
   }
@@ -233,12 +252,13 @@ export class PostgresRunStore implements RunStore {
     }
   }
   async list(
-    options: { ownerId?: string; projectId?: string; limit?: number } = {},
+    options: { ownerId?: string; projectId?: string; sessionId?: string; limit?: number } = {},
   ): Promise<StoredRun[]> {
     const limit = options.limit ?? 100;
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1000)
       throw new Error("Invalid list limit");
-    if (options.projectId && !options.ownerId) throw new Error("Project runs require an owner");
+    if ((options.projectId || options.sessionId) && !options.ownerId)
+      throw new Error("Project runs require an owner");
     const rows = await this.db
       .select()
       .from(schema.runs)
@@ -248,6 +268,9 @@ export class PostgresRunStore implements RunStore {
           options.projectId === undefined
             ? undefined
             : eq(schema.runs.projectId, options.projectId),
+          options.sessionId === undefined
+            ? undefined
+            : eq(schema.runs.sessionId, options.sessionId),
         ),
       )
       .orderBy(desc(schema.runs.createdAt), desc(schema.runs.id))

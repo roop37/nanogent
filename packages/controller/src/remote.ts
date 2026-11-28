@@ -42,7 +42,7 @@ export class RemoteController {
 
   async submit(
     input: RunSpec,
-    options: { ownerId?: string; projectId?: string } = {},
+    options: { ownerId?: string; projectId?: string; sessionId?: string } = {},
   ): Promise<string> {
     const spec = RunSpecSchema.parse(input);
     await this.store.create(spec, options);

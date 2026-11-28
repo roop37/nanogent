@@ -189,5 +189,26 @@ describe.skipIf(!dockerAvailable)("web Postgres admission", () => {
     expect(await store.updatePin(owner, saved.id, expected, changed)).toBe(true);
     expect(await store.updatePin(owner, saved.id, expected, expected)).toBe(false);
     expect(await store.get(owner, saved.id)).toEqual({ ...saved, ...changed });
+
+    expect(await store.createSession(other, saved.id, "Foreign")).toBeUndefined();
+    const named = await store.createSession(owner, saved.id, "Documentation");
+    if (!named) throw new Error("Expected a session");
+    expect(named).toMatchObject({ ...changed, name: "Documentation", projectId: saved.id });
+    expect(await store.sessions(other, saved.id)).toEqual([]);
+    expect(await store.session(other, saved.id, named.id)).toBeUndefined();
+    expect(await store.sessions(owner, saved.id)).toEqual([named]);
+    const initial = spec();
+    await backend.submit(initial, owner, saved.id, named.id);
+    await expect(backend.submit(spec(), owner, saved.id, named.id)).rejects.toThrow();
+    await expect(backend.submit(spec(), other, saved.id, named.id)).rejects.toThrow(
+      "Session not found",
+    );
+    await backend.cancel(initial.id);
+    const next = { ...spec(), conversation: [{ task: "First task", answer: "First result." }] };
+    await backend.submit(next, owner, saved.id, named.id);
+    expect(await backend.list(owner, saved.id, named.id)).toMatchObject([
+      { spec: next, sessionId: named.id },
+      { spec: initial, sessionId: named.id },
+    ]);
   });
 });

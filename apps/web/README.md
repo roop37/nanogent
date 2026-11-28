@@ -153,9 +153,15 @@ credentials and keeps the user's imported project entries. Rotating the token ke
 Choose **Change branch** on the project page to pin a branch's latest commit. File browsing and new sessions use
 the saved pin. Previously submitted runs keep their original commit.
 
-Open a public project and choose **New session** to start a run from its pinned commit. A project can have
-multiple independent runs. Open them from **Sessions** on the project page. The general **New run** form also
-lets you select an imported project or paste a public repository URL. Private projects support file browsing.
+Open a public project and choose **New session** to name a conversation. It keeps its starting commit and shows
+the tasks and results of its runs. Reopen it from the project page or the header. A follow-up uses up to six recent
+completed replies within a shared character limit, and checks out a fresh copy of the session's saved commit.
+Use **New run** for an independent task against a project or a pasted public URL. Private projects support file
+browsing.
+
+For the named-sessions release, apply migration `0004_named_project_sessions` with `pnpm db:migrate`. Update the
+[runner](../worker/README.md#updating-a-running-service) before promoting the web deployment so it can read
+follow-up run specs.
 
 See [GitHub App registration](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app)
 and [GitHub App user authorization](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app).

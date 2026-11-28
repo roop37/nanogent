@@ -3,6 +3,7 @@ import {
   ChevronDown,
   Files,
   Menu,
+  MessagesSquare,
   PanelLeftClose,
   Plus,
   Search,
@@ -53,12 +54,14 @@ const RunsContext = createContext<{
   allowance: Allowance | null;
   connected: boolean;
   online: boolean;
+  openEditor: (tab: EditorTab) => void;
 }>({
   runs: [],
   clock: 0,
   allowance: null,
   connected: true,
   online: true,
+  openEditor: () => {},
 });
 export const useRuns = () => useContext(RunsContext);
 export function Shell({
@@ -77,7 +80,7 @@ export function Shell({
   initialConnected: boolean;
   initialTime: number;
   projects: Pick<Project, "id" | "fullName">[] | null;
-  user: { name: string; email: string };
+  user: { id: string; name: string; email: string };
   config: Config;
 }) {
   const router = useRouter();
@@ -96,13 +99,19 @@ export function Shell({
   const [tabs, setTabs] = useState<EditorTab[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [message, setMessage] = useState("");
+  const tabsKey = `nanogent-tabs:${user.id}`;
   const dismiss = useCallback(() => setMessage(""), []);
   const runsRef = useRef(runs);
   runsRef.current = runs;
   const current = runs.find((r) => pathname === `/runs/${r.spec.id}`);
-  const currentProject = projects?.find((project) => pathname === `/projects/${project.id}`);
+  const [, currentProjectId, currentSessionId] =
+    /^\/projects\/([^/]+)(?:\/sessions\/([^/]+))?$/.exec(pathname) ?? [];
+  const currentProject = projects?.find((project) => project.id === currentProjectId);
   const runProjectId = currentProject?.id ?? current?.projectId;
-  const newRunHref = runProjectId ? `/runs/new?project=${runProjectId}` : "/runs/new";
+  const sessionId = currentSessionId ?? current?.sessionId;
+  const newRunHref = runProjectId
+    ? `/runs/new?${new URLSearchParams({ project: runProjectId, ...(sessionId && { session: sessionId }) })}`
+    : "/runs/new";
   const groups = groupRuns(runs, clock);
   useEffect(() => {
     const update = () => {
@@ -125,29 +134,35 @@ export function Shell({
   };
   useEffect(() => {
     try {
-      setTabs(readTabs(sessionStorage.getItem("nanogent-tabs")));
+      setTabs(readTabs(sessionStorage.getItem(tabsKey)));
     } catch {
       /* Storage may be disabled. */
     }
     setHydrated(true);
-  }, []);
+  }, [tabsKey]);
+  const openEditor = useCallback(
+    (tab: EditorTab) => {
+      if (hydrated) setTabs((prior) => tabReducer(prior, { type: "open", tab }));
+    },
+    [hydrated],
+  );
   useEffect(() => {
-    if (!hydrated || !pathname.startsWith("/runs/")) return;
+    if (!pathname.startsWith("/runs/")) return;
     const title =
       pathname === "/runs/new"
         ? "New run"
         : (current?.spec.task ?? pathname.split("/").at(-1) ?? "Run");
-    setTabs((prior) => tabReducer(prior, { type: "open", tab: { href: pathname, title } }));
-  }, [pathname, current?.spec.task, hydrated]);
+    openEditor({ href: pathname, title });
+  }, [pathname, current?.spec.task, openEditor]);
   useEffect(() => {
     if (hydrated) {
       try {
-        sessionStorage.setItem("nanogent-tabs", JSON.stringify(tabs));
+        sessionStorage.setItem(tabsKey, JSON.stringify(tabs));
       } catch {
         /* Tabs still work without storage. */
       }
     }
-  }, [tabs, hydrated]);
+  }, [tabs, hydrated, tabsKey]);
   // Refresh after navigation so a submitted run appears immediately.
   // biome-ignore lint/correctness/useExhaustiveDependencies: route changes trigger a refresh
   useEffect(() => {
@@ -436,7 +451,7 @@ export function Shell({
     </Popover>
   );
   return (
-    <RunsContext.Provider value={{ runs, clock, allowance, connected, online }}>
+    <RunsContext.Provider value={{ runs, clock, allowance, connected, online, openEditor }}>
       <div className="workspace">
         <header className="mobile-topbar">
           <button type="button" aria-label="Open runs menu" onClick={() => setDrawer(true)}>
@@ -565,11 +580,28 @@ export function Shell({
                 Overview
               </Link>
               {tabs.map((tab) => {
-                const run = runs.find((r) => `/runs/${r.spec.id}` === tab.href);
+                const isSession = tab.href.startsWith("/projects/");
+                const run = runs.find((r) =>
+                  isSession
+                    ? !!r.sessionId &&
+                      `/projects/${r.projectId}/sessions/${r.sessionId}` === tab.href
+                    : `/runs/${r.spec.id}` === tab.href,
+                );
                 return (
                   <div className="editor-tab" data-active={pathname === tab.href} key={tab.href}>
-                    {run ? <StatusDot state={run.state} /> : <Plus size={14} />}
-                    <Link href={tab.href} className="min-w-0 flex-1 truncate" title={tab.title}>
+                    {run ? (
+                      <StatusDot state={run.state} />
+                    ) : isSession ? (
+                      <MessagesSquare size={14} />
+                    ) : (
+                      <Plus size={14} />
+                    )}
+                    <Link
+                      href={tab.href}
+                      prefetch={isSession ? false : null}
+                      className="min-w-0 flex-1 truncate"
+                      title={tab.title}
+                    >
                       {tab.title}
                     </Link>
                     <button

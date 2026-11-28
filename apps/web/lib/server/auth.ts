@@ -18,8 +18,7 @@ export function auth() {
 export async function getSession(): Promise<Session> {
   if (testMode()) {
     const value = (await cookies()).get("nanogent-test-session")?.value;
-    const idSuffix =
-      value === "signed-in" ? 1 : value === "empty" ? 2 : value === "github" ? 3 : null;
+    const idSuffix = ["signed-in", "empty", "github", "github-sessions"].indexOf(value ?? "") + 1;
     return idSuffix
       ? {
           user: {

@@ -3,6 +3,7 @@ import { Play } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import type { ProjectSession } from "@/lib/projects";
 import { modelName } from "@/lib/types";
 import { ProviderIcon } from "./provider-icon";
 import { useRuns } from "./shell";
@@ -17,6 +18,7 @@ export function NewRun({
   dailyCap,
   initialProjectId,
   projects,
+  session,
 }: {
   models: { id: string; input: number; output: number }[];
   defaultModel: string;
@@ -24,6 +26,7 @@ export function NewRun({
   dailyCap: number;
   initialProjectId: string;
   projects: { id: string; fullName: string; branch: string }[];
+  session?: ProjectSession;
 }) {
   const router = useRouter();
   const { allowance } = useRuns();
@@ -35,6 +38,7 @@ export function NewRun({
   const [repoError, setRepoError] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const sessionHref = session ? `/projects/${session.projectId}/sessions/${session.id}` : "/";
   return (
     <div className="new-run-page">
       <form
@@ -58,6 +62,7 @@ export function NewRun({
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 ...(projectId ? { projectId } : { repoUrl: form.get("repoUrl") }),
+                ...(session && { sessionId: session.id }),
                 task: form.get("task"),
                 model: form.get("model"),
                 maxCostUsd: Number(form.get("maxCostUsd")),
@@ -84,13 +89,21 @@ export function NewRun({
         <div className="new-run-scroll">
           <div className="mx-auto max-w-2xl space-y-6">
             <header>
-              <Link href="/" className="text-sm text-muted-foreground hover:text-link">
-                All runs
+              <Link href={sessionHref} className="text-sm text-muted-foreground hover:text-link">
+                {session ? "Back to session" : "All runs"}
               </Link>
               <h1 className="mt-5 text-2xl font-medium tracking-tight">New run</h1>
               <p className="mt-2 text-muted-foreground">Describe the change and how to check it.</p>
             </header>
-            {projects.length > 0 && (
+            {session && (
+              <div className="rounded-md border border-border p-3 text-sm">
+                <p className="font-medium">{session.name}</p>
+                <p className="mt-1 font-mono text-xs text-muted-foreground">
+                  {session.branch} · {session.commitSha.slice(0, 8)}
+                </p>
+              </div>
+            )}
+            {!session && projects.length > 0 && (
               <div>
                 <label className="mb-2 block text-sm font-medium" htmlFor="projectId">
                   Repository source
@@ -289,7 +302,7 @@ export function NewRun({
           )}
           <div className="mx-auto flex max-w-2xl flex-wrap items-center justify-end gap-x-3 gap-y-2">
             <Button asChild variant="ghost">
-              <Link href="/">Back to runs</Link>
+              <Link href={sessionHref}>{session ? "Back to session" : "Back to runs"}</Link>
             </Button>
             <Button type="submit" disabled={pending}>
               <Play size={14} />

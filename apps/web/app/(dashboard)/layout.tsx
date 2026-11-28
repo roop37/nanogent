@@ -25,6 +25,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   ]);
   return (
     <Shell
+      key={user.id}
       user={user}
       initial={data?.runs ?? []}
       initialAllowance={data?.allowance ?? null}

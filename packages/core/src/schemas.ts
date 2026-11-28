@@ -66,10 +66,23 @@ export const RepoSchema = z.union([
   z.strictObject({ url: z.url(), ref: nonempty.optional() }),
   z.strictObject({ localPath: nonempty, ref: nonempty.optional() }),
 ]);
+export const ConversationSchema = z
+  .array(
+    z.strictObject({
+      task: nonempty.max(12000),
+      answer: nonempty.max(30000),
+    }),
+  )
+  .max(6)
+  .refine(
+    (turns) =>
+      turns.reduce((size, turn) => size + turn.task.length + turn.answer.length, 0) <= 48000,
+  );
 export const RunSpecSchema = z.strictObject({
   id: RunIdSchema,
   repo: RepoSchema,
   task: nonempty,
+  conversation: ConversationSchema.optional(),
   setupCommands: z.array(nonempty).default([]),
   verifyCommand: nonempty.optional(),
   model: nonempty,

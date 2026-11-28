@@ -1,8 +1,8 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
 import { type PostgresRunStore, postgresSchema as schema } from "@nanogent/store";
-import { and, asc, eq, sql } from "drizzle-orm";
-import type { Project, ProjectInput, ProjectPin } from "../projects";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
+import type { Project, ProjectInput, ProjectPin, ProjectSession } from "../projects";
 import { withWebDatabase } from "./db";
 import { credentialsSchema, exchangeGitHub, type GitHubConfig, seal, unseal } from "./github-auth";
 import { HttpError } from "./guard";
@@ -16,6 +16,13 @@ export interface ProjectStore {
   get(owner: string, id: string): Promise<Project | undefined>;
   save(owner: string, projects: ProjectInput[]): Promise<void>;
   updatePin(owner: string, id: string, expected: ProjectPin, pin: ProjectPin): Promise<boolean>;
+  sessions(owner: string, projectId: string): Promise<ProjectSession[]>;
+  session(owner: string, projectId: string, id: string): Promise<ProjectSession | undefined>;
+  createSession(
+    owner: string,
+    projectId: string,
+    name: string,
+  ): Promise<ProjectSession | undefined>;
   connect(row: Connection): Promise<void>;
   disconnect(owner: string): Promise<void>;
   access(owner: string, config: GitHubConfig): Promise<Access | null>;
@@ -28,6 +35,13 @@ const fields = {
   commitSha: schema.projects.commitSha,
   installationId: schema.projects.installationId,
   repositoryId: schema.projects.repositoryId,
+};
+const sessionFields = {
+  id: schema.projectSessions.id,
+  projectId: schema.projectSessions.projectId,
+  name: schema.projectSessions.name,
+  branch: schema.projectSessions.branch,
+  commitSha: schema.projectSessions.commitSha,
 };
 export const connectionScope = (owner: string) => `github-credentials:${owner}`;
 
@@ -46,6 +60,11 @@ export function createProjectStore(db: PostgresRunStore["db"]): ProjectStore {
   const fresh = (row: Connection) => row.expiresAt.getTime() > Date.now() + 60_000;
   const ownedProject = (owner: string, id: string) =>
     and(eq(schema.projects.ownerId, owner), eq(schema.projects.id, id));
+  const sessionRows = () =>
+    db
+      .select(sessionFields)
+      .from(schema.projectSessions)
+      .innerJoin(schema.projects, eq(schema.projects.id, schema.projectSessions.projectId));
   return {
     list: (owner) =>
       db
@@ -77,6 +96,28 @@ export function createProjectStore(db: PostgresRunStore["db"]): ProjectStore {
         )
         .returning({ id: schema.projects.id });
       return !!updated;
+    },
+    sessions: (owner, projectId) =>
+      sessionRows()
+        .where(ownedProject(owner, projectId))
+        .orderBy(desc(schema.projectSessions.createdAt), desc(schema.projectSessions.id)),
+    session: async (owner, projectId, id) =>
+      (
+        await sessionRows().where(
+          and(ownedProject(owner, projectId), eq(schema.projectSessions.id, id)),
+        )
+      )[0],
+    createSession: async (owner, projectId, name) => {
+      const [project] = await db
+        .select(fields)
+        .from(schema.projects)
+        .where(ownedProject(owner, projectId));
+      if (!project) return undefined;
+      const [session] = await db
+        .insert(schema.projectSessions)
+        .values({ projectId, name, branch: project.branch, commitSha: project.commitSha })
+        .returning(sessionFields);
+      return session;
     },
     connect: async (row) => {
       const { ownerId, ...values } = row;
@@ -117,12 +158,15 @@ export function createProjectStore(db: PostgresRunStore["db"]): ProjectStore {
 
 const testState = globalThis as typeof globalThis & {
   nanogentProjects?: Map<string, Project[]>;
+  nanogentProjectSessions?: Map<string, ProjectSession[]>;
   nanogentProjectDisconnected?: Set<string>;
 };
 function fakeProjectStore(): ProjectStore {
   testState.nanogentProjects ??= new Map();
+  testState.nanogentProjectSessions ??= new Map();
   testState.nanogentProjectDisconnected ??= new Set();
   const projects = testState.nanogentProjects;
+  const sessions = testState.nanogentProjectSessions;
   const disconnected = testState.nanogentProjectDisconnected;
   return {
     list: async (owner) => projects.get(owner) ?? [],
@@ -148,10 +192,31 @@ function fakeProjectStore(): ProjectStore {
       Object.assign(project, pin);
       return true;
     },
+    sessions: async (owner, projectId) =>
+      projects.get(owner)?.some((project) => project.id === projectId)
+        ? (sessions.get(projectId) ?? [])
+        : [],
+    session: async (owner, projectId, id) =>
+      projects.get(owner)?.some((project) => project.id === projectId)
+        ? sessions.get(projectId)?.find((session) => session.id === id)
+        : undefined,
+    createSession: async (owner, projectId, name) => {
+      const project = projects.get(owner)?.find((candidate) => candidate.id === projectId);
+      if (!project) return undefined;
+      const session = {
+        id: randomUUID(),
+        projectId,
+        name,
+        branch: project.branch,
+        commitSha: project.commitSha,
+      };
+      sessions.set(projectId, [session, ...(sessions.get(projectId) ?? [])]);
+      return session;
+    },
     connect: async ({ ownerId }) => void disconnected.delete(ownerId),
     disconnect: async (owner) => void disconnected.add(owner),
     access: async (owner) =>
-      (owner.endsWith("1") || owner.endsWith("3")) && !disconnected.has(owner)
+      !owner.endsWith("2") && !disconnected.has(owner)
         ? { login: "example", token: "scripted" }
         : null,
   };

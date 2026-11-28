@@ -79,6 +79,33 @@ it("completes without a verify command but explicitly marks it unverified", asyn
   expect(result).toMatchObject({ status: "completed", verified: false, verify: null });
   expect(sandbox.exec).not.toHaveBeenCalled();
 });
+it("passes saved conversation to the brain and keeps it out of the sandbox spec", async () => {
+  const { ctx, sandbox, spec } = runtime({
+    task: "Follow-up",
+    conversation: [{ task: "First task", answer: "First result\nwith details." }],
+  });
+  const create = vi.fn(async () => sandbox);
+  const result = await new Executor().execute(spec, {
+    brain: {
+      run: async ({ history }) => {
+        expect(history).toEqual([
+          { role: "user", content: "First task" },
+          { role: "assistant", content: "First result\nwith details." },
+          { role: "user", content: "Follow-up" },
+        ]);
+        return { status: "submitted", summary: "done" };
+      },
+    },
+    provider: { create },
+    events: ctx.events,
+    transition: async () => {},
+  });
+  expect(result.status).toBe("completed");
+  expect(create).not.toHaveBeenCalledWith(
+    expect.objectContaining({ conversation: expect.anything() }),
+    expect.anything(),
+  );
+});
 it.each(["brain", "diff", "cleanup"])("tears down on %s failure", async (failure) => {
   const { ctx, sandbox, spec } = runtime();
   if (failure === "diff") vi.mocked(sandbox.diff).mockRejectedValue(new Error("diff failed"));

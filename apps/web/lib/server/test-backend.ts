@@ -198,13 +198,19 @@ export function fakeBackend(): Backend {
   }
   const entries = globalState.nanogentWebFake;
   return {
-    list: async (owner, projectId) =>
+    list: async (owner, projectId, sessionId, limit = 100) =>
       [...entries.values()]
-        .filter((e) => e.owner === owner && (!projectId || e.run.projectId === projectId))
+        .filter(
+          (e) =>
+            e.owner === owner &&
+            (!projectId || e.run.projectId === projectId) &&
+            (!sessionId || e.run.sessionId === sessionId),
+        )
         .map((e) => {
           return e.run;
         })
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .slice(0, limit),
     get: async (owner, id) => {
       const e = entries.get(id);
       if (!e || e.owner !== owner) return undefined;
@@ -236,13 +242,14 @@ export function fakeBackend(): Backend {
           0,
         ),
     }),
-    submit: async (spec: RunSpec, owner, projectId) => {
+    submit: async (spec: RunSpec, owner, projectId, sessionId) => {
       const now = new Date().toISOString();
       const e: Entry = {
         owner,
         run: {
           spec,
           ...(projectId && { projectId }),
+          ...(sessionId && { sessionId }),
           state: "running",
           createdAt: now,
           updatedAt: now,

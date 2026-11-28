@@ -134,3 +134,10 @@ Previously submitted runs retain their original commit in their run spec. The da
 as plain text. Disconnect removes the connection and keeps project records. A session started from a public project
 uses its pinned commit and stores the project ID on the run. Submission rechecks the signed-in user's GitHub
 repository access. Private projects support file browsing.
+
+Named sessions belong to a project and retain their starting branch and commit. Each associated run adds a request
+and result to that session's history. The web API checks project ownership and GitHub access and serializes
+admission per owner. A partial unique index enforces one active run per session. Follow-ups save a bounded snapshot
+of recent completed tasks and their written results in the run spec. The executor passes those turns to the model
+and supplies only the existing checkout fields to the sandbox. The header keeps open tabs in per-account browser
+session storage. The project page can reopen a saved session after its tab has closed.

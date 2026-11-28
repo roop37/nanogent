@@ -1,4 +1,5 @@
 import type { RunResult, RunSpec, RunState } from "@nanogent/core";
+import { sql } from "drizzle-orm";
 import {
   boolean,
   index,
@@ -18,6 +19,7 @@ export const runs = pgTable(
     id: text("id").primaryKey(),
     ownerId: uuid("owner_id"),
     projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
+    sessionId: uuid("session_id").references(() => projectSessions.id, { onDelete: "set null" }),
     spec: jsonb("spec").$type<RunSpec>().notNull(),
     state: text("state").$type<RunState>().notNull().default("queued"),
     result: jsonb("result").$type<RunResult>(),
@@ -28,6 +30,12 @@ export const runs = pgTable(
   (table) => [
     index("runs_owner_created_idx").on(table.ownerId, table.createdAt),
     index("runs_owner_project_created_idx").on(table.ownerId, table.projectId, table.createdAt),
+    index("runs_session_created_idx").on(table.sessionId, table.createdAt),
+    uniqueIndex("runs_active_session_idx")
+      .on(table.sessionId)
+      .where(
+        sql`${table.sessionId} is not null and ${table.state} in ('queued', 'running', 'awaiting_approval')`,
+      ),
   ],
 );
 
@@ -64,4 +72,19 @@ export const projects = pgTable(
     commitSha: text("commit_sha").notNull(),
   },
   (table) => [uniqueIndex("projects_owner_repository_idx").on(table.ownerId, table.repositoryId)],
+);
+
+export const projectSessions = pgTable(
+  "project_sessions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    branch: text("branch").notNull(),
+    commitSha: text("commit_sha").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("project_sessions_project_created_idx").on(table.projectId, table.createdAt)],
 );

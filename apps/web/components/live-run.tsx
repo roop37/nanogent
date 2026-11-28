@@ -359,8 +359,17 @@ export function LiveRun({
       <header className="run-header">
         <div className="run-breadcrumb">
           <Link
-            href={run.projectId ? `/projects/${run.projectId}` : "/"}
-            title={run.projectId ? "Back to project" : "All runs"}
+            href={
+              run.sessionId && run.projectId
+                ? `/projects/${run.projectId}/sessions/${run.sessionId}`
+                : run.projectId
+                  ? `/projects/${run.projectId}`
+                  : "/"
+            }
+            title={
+              run.sessionId ? "Back to session" : run.projectId ? "Back to project" : "All runs"
+            }
+            prefetch={false}
           >
             {repoName(run)}
           </Link>

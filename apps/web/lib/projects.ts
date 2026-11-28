@@ -44,3 +44,10 @@ export type ProjectInput = {
 };
 export type Project = ProjectInput & { id: string };
 export type ProjectPin = Pick<Project, "branch" | "commitSha">;
+export const sessionName = z
+  .string()
+  .trim()
+  .min(1)
+  .max(100)
+  .refine((name) => !/\p{Cc}/u.test(name));
+export type ProjectSession = ProjectPin & { id: string; projectId: string; name: string };

@@ -1,6 +1,7 @@
 import "server-only";
 import { ModelSchema } from "@nanogent/config";
 import {
+  ConversationSchema,
   createRunId,
   DEFAULT_LIMITS,
   RunIdSchema,
@@ -8,16 +9,16 @@ import {
   RunSpecSchema,
 } from "@nanogent/core";
 import { z } from "zod";
-import type { EventPage, RunView } from "../types";
+import { active, type EventPage, type RunView } from "../types";
 import { HttpError, requireSameOrigin, requireUser, type Session } from "./guard";
 import type { settings } from "./settings";
 export interface Backend {
-  list(owner: string, projectId?: string): Promise<RunView[]>;
+  list(owner: string, projectId?: string, sessionId?: string, limit?: number): Promise<RunView[]>;
   get(owner: string, id: string): Promise<RunView | undefined>;
   events(id: string, from: number): Promise<EventPage>;
   withOwnerLock<T>(owner: string, work: () => Promise<T>): Promise<T>;
   allowance(owner: string): Promise<{ activeCount: number; charged: number }>;
-  submit(spec: RunSpec, owner: string, projectId?: string): Promise<string>;
+  submit(spec: RunSpec, owner: string, projectId?: string, sessionId?: string): Promise<string>;
   cancel(id: string): Promise<void>;
 }
 const publicRepoUrl = z
@@ -46,14 +47,29 @@ const submissionFields = {
 };
 export const submissionSchema = z.union([
   z.strictObject({ ...submissionFields, repoUrl: publicRepoUrl }),
-  z.strictObject({ ...submissionFields, projectId: z.uuid() }),
+  z.strictObject({ ...submissionFields, projectId: z.uuid(), sessionId: z.uuid().optional() }),
 ]);
 export type Action = "list" | "submit" | "get" | "events" | "cancel";
 export interface ApiDependencies {
   session(): Promise<Session>;
   settings(): ReturnType<typeof settings>;
   withBackend<T>(work: (backend: Backend) => Promise<T>): Promise<T>;
-  resolveProjectRun?(owner: string, projectId: string): Promise<{ url: string; ref: string }>;
+  resolveProjectRun?(
+    owner: string,
+    projectId: string,
+    sessionId?: string,
+  ): Promise<{ url: string; ref: string }>;
+}
+
+function recentConversation(runs: RunView[]) {
+  const turns: NonNullable<RunSpec["conversation"]> = [];
+  for (const run of runs) {
+    if (run.state !== "completed" || !run.result?.summary.trim()) continue;
+    const turn = { task: run.spec.task, answer: run.result.summary };
+    if (!ConversationSchema.safeParse([turn, ...turns]).success) break;
+    turns.unshift(turn);
+  }
+  return turns;
 }
 export function createApi(deps: ApiDependencies) {
   return async (action: Action, request: Request, id?: string): Promise<Response> => {
@@ -62,6 +78,7 @@ export function createApi(deps: ApiDependencies) {
       if (action === "submit" || action === "cancel") requireSameOrigin(request);
       let spec: RunSpec | undefined;
       let projectId: string | undefined;
+      let sessionId: string | undefined;
       const config = deps.settings();
       if (action === "submit") {
         if (!request.headers.get("content-type")?.startsWith("application/json"))
@@ -95,10 +112,13 @@ export function createApi(deps: ApiDependencies) {
         if (!config.models.includes(model) || data.maxCostUsd > config.maxCost)
           throw new HttpError(400, "Model or cost limit is not allowed.");
         projectId = "projectId" in data ? data.projectId : undefined;
+        sessionId = "sessionId" in data ? data.sessionId : undefined;
         const repo =
           "repoUrl" in data
             ? { url: data.repoUrl }
-            : await deps.resolveProjectRun?.(user.id, data.projectId);
+            : sessionId
+              ? await deps.resolveProjectRun?.(user.id, data.projectId, sessionId)
+              : await deps.resolveProjectRun?.(user.id, data.projectId);
         if (!repo) throw new HttpError(503, "GitHub project sessions are unavailable.");
         spec = RunSpecSchema.parse({
           id: createRunId(),
@@ -122,8 +142,13 @@ export function createApi(deps: ApiDependencies) {
         if (action === "list")
           return { runs: await backend.list(user.id), allowance: await backend.allowance(user.id) };
         if (action === "submit" && spec) {
-          const submitted = spec;
+          const input = spec;
           return backend.withOwnerLock(user.id, async () => {
+            const recent = sessionId ? await backend.list(user.id, projectId, sessionId, 6) : [];
+            if (recent.some((run) => active(run.state)))
+              throw new HttpError(409, "Wait for the current session run to finish.");
+            const conversation = recentConversation(recent);
+            const submitted = conversation.length ? { ...input, conversation } : input;
             const { activeCount, charged } = await backend.allowance(user.id);
             if (activeCount >= 3) throw new HttpError(429, "You already have three active runs.");
             if (charged + submitted.limits.maxCostUsd > config.dailyCap + 1e-9)
@@ -132,9 +157,11 @@ export function createApi(deps: ApiDependencies) {
                 "Daily budget is reserved or spent. Lower the run limit or try tomorrow (UTC).",
               );
             try {
-              const id = projectId
-                ? await backend.submit(submitted, user.id, projectId)
-                : await backend.submit(submitted, user.id);
+              const id = sessionId
+                ? await backend.submit(submitted, user.id, projectId, sessionId)
+                : projectId
+                  ? await backend.submit(submitted, user.id, projectId)
+                  : await backend.submit(submitted, user.id);
               return { id };
             } catch {
               if (await backend.get(user.id, submitted.id))

@@ -2,6 +2,7 @@ import { FileText, Folder } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
+import { CreateProjectSession } from "@/components/create-project-session";
 import { ProjectBranches } from "@/components/project-branches";
 import { Status } from "@/components/status";
 import { Button } from "@/components/ui/button";
@@ -34,10 +35,12 @@ export default async function Page({
     const { client } = await projectConnection(user.id, config);
     const [repo] = await client.authorizedRepos(project.installationId, [project.repositoryId]);
     if (!repo) notFound();
-    const [{ entries, text }, sessions] = await Promise.all([
+    const [{ entries, text }, projectRuns, sessions] = await Promise.all([
       client.content(repo.full_name, project.commitSha, path.data),
       parts.length === 0 ? withBackend((backend) => backend.list(user.id, project.id)) : [],
+      parts.length === 0 ? withProjectStore((store) => store.sessions(user.id, id)) : [],
     ]);
+    const independentRuns = projectRuns.filter((run) => !run.sessionId);
     return (
       <section className="mx-auto flex max-w-5xl flex-col gap-5 px-4 py-6 sm:px-8">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -51,7 +54,7 @@ export default async function Page({
             <p className="text-xs text-muted-foreground">Private repository · file browsing only</p>
           ) : (
             <Button asChild>
-              <Link href={`/runs/new?project=${project.id}`}>New session</Link>
+              <Link href={`/runs/new?project=${project.id}`}>New run</Link>
             </Button>
           )}
         </div>
@@ -64,23 +67,47 @@ export default async function Page({
         )}
         {parts.length === 0 && (
           <section className="space-y-2" aria-label="Project sessions">
-            <h2 className="font-medium">Sessions</h2>
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <h2 className="font-medium">Sessions</h2>
+              {!repo.private && <CreateProjectSession projectId={id} />}
+            </div>
             {sessions.length ? (
               <ul className="divide-y divide-border rounded border">
-                {sessions.map(({ spec, state }) => (
-                  <li key={spec.id}>
+                {sessions.map((session) => (
+                  <li key={session.id}>
                     <Link
-                      href={`/runs/${spec.id}`}
-                      className="flex items-center justify-between gap-3 px-4 py-2 hover:bg-accent"
+                      className="flex flex-wrap justify-between gap-2 px-4 py-2 hover:bg-accent"
+                      href={`${base}/sessions/${session.id}`}
+                      prefetch={false}
                     >
-                      <span className="truncate">{spec.task.split("\n")[0]}</span>
-                      <Status state={state} />
+                      <span className="break-all">{session.name}</span>
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {session.branch} · {session.commitSha.slice(0, 8)}
+                      </span>
                     </Link>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-muted-foreground">No sessions yet.</p>
+              <p className="text-sm text-muted-foreground">No named sessions yet.</p>
+            )}
+            {independentRuns.length > 0 && (
+              <>
+                <h3 className="text-sm font-medium">Independent runs</h3>
+                <ul className="divide-y divide-border rounded border">
+                  {independentRuns.map(({ spec, state }) => (
+                    <li key={spec.id}>
+                      <Link
+                        href={`/runs/${spec.id}`}
+                        className="flex items-center justify-between gap-3 px-4 py-2 hover:bg-accent"
+                      >
+                        <span className="truncate">{spec.task.split("\n")[0]}</span>
+                        <Status state={state} />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </>
             )}
           </section>
         )}

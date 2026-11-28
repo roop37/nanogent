@@ -75,7 +75,7 @@ export async function projectConnection(owner: string, config: GitHubConfig) {
   return { login: access.login, client: projectGitHub(access.token) };
 }
 
-export async function resolveProjectRun(owner: string, projectId: string) {
+export async function resolveProjectRun(owner: string, projectId: string, sessionId?: string) {
   const config = projectConfig();
   if (!config) throw new HttpError(503, "GitHub project sessions are unavailable.");
   const { repo, project } = await authorizedProject(owner, projectId, config);
@@ -84,7 +84,14 @@ export async function resolveProjectRun(owner: string, projectId: string) {
       403,
       "Private projects can be browsed here. Hosted sessions require a public repository.",
     );
-  return { url: `https://github.com/${repo.full_name}`, ref: project.commitSha };
+  const session = sessionId
+    ? await withProjectStore((store) => store.session(owner, projectId, sessionId))
+    : undefined;
+  if (sessionId && !session) throw new HttpError(404, "Session not found.");
+  return {
+    url: `https://github.com/${repo.full_name}`,
+    ref: session?.commitSha ?? project.commitSha,
+  };
 }
 
 export async function authorizedProject(owner: string, projectId: string, config: GitHubConfig) {

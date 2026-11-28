@@ -9,6 +9,7 @@
 - New Run offers the configured Anthropic models and shows model pricing separately from the run budget.
 - GitHub App connection and project import. Browse authorized repositories at a pinned default-branch commit.
 - Start multiple independent runs from one project. Choose and pin a branch for file browsing and future runs.
+- Open named project sessions in the header, reopen saved conversations and continue from recent tasks and results.
 
 **Next**
 - Finish hosted verification with a verified patch, reload, cancellation, account isolation and 10 concurrent runs.
@@ -17,9 +18,9 @@
 
 **Repository workspace**
 - Verify project branch selection on the deployed app.
-- Open multiple named sessions per project in the header. Save their conversations and separate drafts across reloads.
-  Edit in the browser, run tasks against a draft snapshot, and review or apply the resulting patch. Surface conflicts
-  if the draft changed during the run. Keep execution on the runner without an interactive terminal or preview.
+- Save separate drafts per session across reloads. Edit in the browser, run tasks against a draft snapshot, and
+  review or apply the resulting patch. Surface conflicts if the draft changed during the run. Keep execution on
+  the runner without an interactive terminal or preview.
 - Pull remote changes with conflict handling. Commit reviewed changes to a work branch, and require an explicit user
   action to push it or open a PR. Keep GitHub credentials on the server.
 

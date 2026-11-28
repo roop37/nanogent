@@ -48,6 +48,7 @@ export function createBackend(db: PostgresRunStore["db"], notifier?: RunnerNotif
         {
           spec: record.spec,
           ...(record.projectId && { projectId: record.projectId }),
+          ...(record.sessionId && { sessionId: record.sessionId }),
           state: record.state,
           ...(record.result ? { result: record.result } : {}),
           cancelRequested: record.cancelRequested,
@@ -65,10 +66,15 @@ export function createBackend(db: PostgresRunStore["db"], notifier?: RunnerNotif
     });
   }
   const backend: Backend = {
-    list: async (owner, projectId) =>
+    list: async (owner, projectId, sessionId, limit = 100) =>
       views(
         owner,
-        await store.list({ ownerId: owner, limit: 100, ...(projectId && { projectId }) }),
+        await store.list({
+          ownerId: owner,
+          limit,
+          ...(projectId && { projectId }),
+          ...(sessionId && { sessionId }),
+        }),
       ),
     get: async (owner, id) => {
       const [owned] = await db
@@ -106,8 +112,12 @@ export function createBackend(db: PostgresRunStore["db"], notifier?: RunnerNotif
         .where(eq(schema.runs.ownerId, owner));
       return { activeCount: row?.activeCount ?? 0, charged: Number(row?.charged ?? 0) };
     },
-    submit: (spec, ownerId, projectId) =>
-      controller.submit(spec, { ownerId, ...(projectId && { projectId }) }),
+    submit: (spec, ownerId, projectId, sessionId) =>
+      controller.submit(spec, {
+        ownerId,
+        ...(projectId && { projectId }),
+        ...(sessionId && { sessionId }),
+      }),
     cancel: (id) => controller.cancel(id),
   };
   return backend;

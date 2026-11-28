@@ -22,7 +22,11 @@ export function relativeTime(value: string, now = Date.now()) {
   return `${Math.floor(seconds / 86400)}d ago`;
 }
 const TabSchema = z.object({
-  href: z.string().regex(/^\/runs\/(?:new|run_[a-zA-Z0-9_]+)$/),
+  href: z
+    .string()
+    .regex(
+      /^(?:\/runs\/(?:new|run_[a-zA-Z0-9_]+)|\/projects\/[a-f0-9-]{36}\/sessions\/[a-f0-9-]{36})$/,
+    ),
   title: z.string().max(12000),
 });
 export type EditorTab = z.infer<typeof TabSchema>;

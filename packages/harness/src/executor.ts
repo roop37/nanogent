@@ -65,7 +65,15 @@ export class Executor {
       const outcome = await deps.brain.run({
         ...ctx,
         spec,
-        history: [],
+        history: spec.conversation?.length
+          ? [
+              ...spec.conversation.flatMap(({ task, answer }) => [
+                { role: "user" as const, content: task },
+                { role: "assistant" as const, content: answer },
+              ]),
+              { role: "user", content: spec.task },
+            ]
+          : [],
         tools: registry.tools(ctx),
       });
       signal.throwIfAborted();
