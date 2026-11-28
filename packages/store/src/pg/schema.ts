@@ -8,6 +8,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -38,4 +39,25 @@ export const runEvents = pgTable(
     data: jsonb("data").notNull(),
   },
   (table) => [primaryKey({ columns: [table.runId, table.seq] })],
+);
+
+export const githubConnections = pgTable("github_connections", {
+  ownerId: uuid("owner_id").primaryKey(),
+  login: text("login").notNull(),
+  credentials: text("credentials").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+});
+
+export const projects = pgTable(
+  "projects",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerId: uuid("owner_id").notNull(),
+    installationId: text("installation_id").notNull(),
+    repositoryId: text("repository_id").notNull(),
+    fullName: text("full_name").notNull(),
+    branch: text("branch").notNull(),
+    commitSha: text("commit_sha").notNull(),
+  },
+  (table) => [uniqueIndex("projects_owner_repository_idx").on(table.ownerId, table.repositoryId)],
 );

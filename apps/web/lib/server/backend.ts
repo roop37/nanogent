@@ -5,15 +5,12 @@ import {
   type RunnerNotifier,
 } from "@nanogent/controller/remote";
 import { PostgresRunStore, postgresSchema as schema } from "@nanogent/store";
-import { neonConfig, Pool } from "@neondatabase/serverless";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/neon-serverless";
-import ws from "ws";
 import type { RunView } from "../types";
 import type { Backend } from "./api";
+import { withWebDatabase } from "./db";
 import { eventPage } from "./event-page";
 
-neonConfig.webSocketConstructor = ws;
 export function createBackend(db: PostgresRunStore["db"], notifier?: RunnerNotifier): Backend {
   const store = new PostgresRunStore(db);
   const controller = new RemoteController(store, notifier);
@@ -111,19 +108,7 @@ export function createBackend(db: PostgresRunStore["db"], notifier?: RunnerNotif
 }
 
 export async function withProductionBackend<T>(work: (backend: Backend) => Promise<T>): Promise<T> {
-  const connectionString = process.env.NANOGENT_DATABASE_URL;
-  if (!connectionString) throw new Error("Database is not configured");
-  const pool = new Pool({
-    connectionString,
-    max: 4,
-    connectionTimeoutMillis: 10000,
-    query_timeout: 15000,
-  });
-  try {
-    return await work(createBackend(drizzle(pool, { schema }), runnerNotifier()));
-  } finally {
-    await pool.end();
-  }
+  return withWebDatabase((db) => work(createBackend(db, runnerNotifier())));
 }
 
 // Optional: without these the runner still finds new runs on its next sweep, just later.

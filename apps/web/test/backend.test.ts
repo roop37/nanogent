@@ -4,6 +4,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { dockerAvailable, startPostgres } from "../../../packages/store/test/postgres";
 import { createApi } from "../lib/server/api";
 import { createBackend } from "../lib/server/backend";
+import { type GitHubConfig, seal } from "../lib/server/github-auth";
+import { connectionScope, createProjectStore } from "../lib/server/project-store";
 import { settings } from "../lib/server/settings";
 
 function spec(cost = 0.1) {
@@ -117,5 +119,52 @@ describe.skipIf(!dockerAvailable)("web Postgres admission", () => {
     } finally {
       await other.pool.end();
     }
+  });
+
+  it("isolates project imports and connections by owner and preserves the pinned commit on retry", async () => {
+    const owner = crypto.randomUUID();
+    const other = crypto.randomUUID();
+    const store = createProjectStore(pg.db);
+    const first = {
+      installationId: "7",
+      repositoryId: "21",
+      fullName: "example/calc",
+      branch: "main",
+      commitSha: "a".repeat(40),
+    };
+    await store.save(owner, [first]);
+    const [saved] = await store.list(owner);
+    expect(saved).toMatchObject(first);
+    if (!saved) throw new Error("Expected a project");
+    await store.save(owner, [{ ...first, commitSha: "b".repeat(40) }]);
+    await store.save(other, [first]);
+    expect(await store.list(owner)).toEqual([saved]);
+    expect(await store.get(other, saved.id)).toBeUndefined();
+    expect(await store.list(other)).toHaveLength(1);
+
+    const config: GitHubConfig = {
+      slug: "fixture",
+      clientId: "fixture",
+      clientSecret: "fixture",
+      origin: "https://example.invalid",
+      key: Buffer.alloc(32),
+    };
+    await store.connect({
+      ownerId: owner,
+      login: "example",
+      expiresAt: new Date(Date.now() + 3_600_000),
+      credentials: seal(config.key, connectionScope(owner), {
+        access: "fixture_access",
+        refresh: "fixture_refresh",
+      }),
+    });
+    expect(await store.access(owner, config)).toEqual({
+      login: "example",
+      token: "fixture_access",
+    });
+    expect(await store.access(other, config)).toBeNull();
+    await store.disconnect(owner);
+    expect(await store.access(owner, config)).toBeNull();
+    expect(await store.get(owner, saved.id)).toEqual(saved);
   });
 });

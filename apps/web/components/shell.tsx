@@ -26,6 +26,7 @@ import {
   useState,
 } from "react";
 import { visiblePolling } from "@/lib/polling";
+import type { Project } from "@/lib/projects";
 import { active, modelName, money, type RunView } from "@/lib/types";
 import {
   closeDestination,
@@ -66,6 +67,7 @@ export function Shell({
   initialAllowance,
   initialConnected,
   initialTime,
+  projects,
   user,
   config,
 }: {
@@ -74,6 +76,7 @@ export function Shell({
   initialAllowance: Allowance | null;
   initialConnected: boolean;
   initialTime: number;
+  projects: Pick<Project, "id" | "fullName">[] | null;
   user: { name: string; email: string };
   config: Config;
 }) {
@@ -97,6 +100,7 @@ export function Shell({
   const runsRef = useRef(runs);
   runsRef.current = runs;
   const current = runs.find((r) => pathname === `/runs/${r.spec.id}`);
+  const currentProject = projects?.find((project) => pathname === `/projects/${project.id}`);
   const groups = groupRuns(runs, clock);
   useEffect(() => {
     const update = () => {
@@ -264,6 +268,37 @@ export function Shell({
             <PanelLeftClose size={15} />
           </button>
         </div>
+        {projects && (
+          <nav
+            aria-label="Projects"
+            className="mb-3 max-h-36 shrink-0 overflow-auto border-b px-3 pb-3"
+          >
+            <div className="flex items-center justify-between px-1 text-xs text-muted-foreground">
+              <h2>Projects</h2>
+              <Link
+                prefetch={false}
+                onClick={() => setDrawer(false)}
+                href="/projects"
+                className="flex items-center gap-1 rounded p-1 hover:bg-accent"
+              >
+                <Plus size={14} aria-hidden="true" /> Import projects
+              </Link>
+            </div>
+            {projects.map((project) => (
+              <Link
+                prefetch={false}
+                className="block truncate rounded px-2 py-1.5 hover:bg-accent aria-[current=page]:bg-selected"
+                key={project.id}
+                href={`/projects/${project.id}`}
+                onClick={() => setDrawer(false)}
+                aria-current={currentProject?.id === project.id ? "page" : undefined}
+                title={project.fullName}
+              >
+                {project.fullName}
+              </Link>
+            ))}
+          </nav>
+        )}
         <div className="px-3 pb-4">
           <Button
             variant="outline"
@@ -413,7 +448,11 @@ export function Shell({
           >
             <option value="/">Recent runs</option>
             {!tabs.some((t) => t.href === pathname) && pathname !== "/" && (
-              <option value={pathname}>{current?.spec.task ?? "New run"}</option>
+              <option value={pathname}>
+                {current?.spec.task ??
+                  currentProject?.fullName ??
+                  (pathname === "/projects" ? "Projects" : "New run")}
+              </option>
             )}
             {tabs.map((tab) => (
               <option key={tab.href} value={tab.href}>

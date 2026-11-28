@@ -117,3 +117,16 @@ Dark tokens and locally bundled fonts apply to all pages. OAuth providers come f
 return paths are restricted to same-origin relative paths, and provider secrets remain in Neon.
 
 See [UI decisions](decisions/0007-web-ui.md), [web setup](../apps/web/README.md) and [ADR 0006](decisions/0006-web-and-auth.md) for deployment and quota details.
+
+## GitHub projects
+
+The GitHub App connection uses a separate OAuth flow after Neon sign-in. The OAuth cookie is short-lived and bound
+to the session owner. The callback checks state and uses PKCE. Postgres stores encrypted user and refresh tokens per
+owner. A row lock serializes refresh because GitHub rotates the refresh token. The browser receives repository metadata
+and file data, and the runner never receives GitHub credentials.
+
+The import catalog uses GitHub App user authorization, which covers repositories accessible to both the app and the
+user. Import checks every selected repository again and stores its default branch and head commit in an owner-scoped
+project row. The owner and repository ID make repeated imports idempotent. File browsing rechecks repository access
+and reads the stored commit. The dashboard renders bounded text previews as plain text. Disconnect removes the
+connection and keeps project records. Imported repositories stay outside the run submission path for now.

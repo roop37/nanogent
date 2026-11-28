@@ -15,6 +15,13 @@
       "when": 1795710647880,
       "tag": "0001_drop_trigger_run_id",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1795831668885,
+      "tag": "0002_github_projects",
+      "breakpoints": true
     }
   ]
 }

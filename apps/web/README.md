@@ -121,6 +121,37 @@ SDK references: [Neon Next.js setup](https://neon.com/docs/auth/quick-start/next
 [managed Auth environment](https://neon.com/docs/ai/skills/neon-auth/references/managed-auth.md), and
 [Neon serverless driver](https://neon.com/docs/serverless/serverless-driver).
 
+## GitHub project import
+
+Register one GitHub App for the production deployment. In GitHub App settings set:
+
+- Homepage URL: `https://nanogent.hoizr.com`
+- Callback URL: `https://nanogent.hoizr.com/api/github/callback`
+- Setup URL: `https://nanogent.hoizr.com/projects`
+- Installation availability: **Any account**
+- Repository permissions: **Contents: Read-only** and **Metadata: Read-only**
+- Keep **Expire user authorization tokens** enabled. Leave **Request user authorization during installation** off.
+  The dashboard starts authorization and installation as separate steps. Webhooks are optional for import.
+
+Set these server environment variables in Vercel Production:
+
+| Variable | Value |
+| --- | --- |
+| `NANOGENT_GITHUB_ORIGIN` | `https://nanogent.hoizr.com`, without a trailing slash |
+| `NANOGENT_GITHUB_APP_SLUG` | The GitHub App's URL slug |
+| `NANOGENT_GITHUB_CLIENT_ID` | The GitHub App client ID |
+| `NANOGENT_GITHUB_CLIENT_SECRET` | The GitHub App client secret |
+| `NANOGENT_GITHUB_TOKEN_KEY` | 32 random bytes encoded as unpadded base64url, stored as a secret |
+
+Apply `pnpm db:migrate` against the production database before deploying. Use the configured origin when connecting
+GitHub. The existing Neon Auth sign-in remains separate. From **Import projects**, connect GitHub and configure
+repository access for the GitHub App. Import one or more repositories and open them in the sidebar. Each project
+pins the default branch at import. File previews display UTF-8 text up to 128 KiB. Disconnecting removes the saved
+credentials and keeps the user's imported project entries. Rotating the token key requires reconnecting GitHub.
+
+See [GitHub App registration](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app)
+and [GitHub App user authorization](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app).
+
 ## Workspace
 
 The dark interface uses VS Code Dark Modern colours, Inter for UI text, and JetBrains Mono for code and numbers.
