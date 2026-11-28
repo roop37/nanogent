@@ -1,4 +1,4 @@
-import type { RunResult, RunSpec, RunState } from "@nanogent/core";
+import type { DraftSnapshot, RunResult, RunSpec, RunState } from "@nanogent/core";
 import { sql } from "drizzle-orm";
 import {
   boolean,
@@ -20,6 +20,7 @@ export const runs = pgTable(
     ownerId: uuid("owner_id"),
     projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
     sessionId: uuid("session_id").references(() => projectSessions.id, { onDelete: "set null" }),
+    draftVersion: integer("draft_version"),
     spec: jsonb("spec").$type<RunSpec>().notNull(),
     state: text("state").$type<RunState>().notNull().default("queued"),
     result: jsonb("result").$type<RunResult>(),
@@ -38,6 +39,13 @@ export const runs = pgTable(
       ),
   ],
 );
+
+export const runDrafts = pgTable("run_drafts", {
+  runId: text("run_id")
+    .primaryKey()
+    .references(() => runs.id, { onDelete: "cascade" }),
+  snapshot: jsonb("snapshot").$type<DraftSnapshot>().notNull(),
+});
 
 export const runEvents = pgTable(
   "run_events",
@@ -85,6 +93,8 @@ export const projectSessions = pgTable(
     branch: text("branch").notNull(),
     commitSha: text("commit_sha").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    draftVersion: integer("draft_version").notNull().default(0),
+    draftFiles: jsonb("draft_files").$type<DraftSnapshot["files"]>().notNull().default([]),
   },
   (table) => [index("project_sessions_project_created_idx").on(table.projectId, table.createdAt)],
 );

@@ -10,6 +10,7 @@
 - GitHub App connection and project import. Browse authorized repositories at a pinned default-branch commit.
 - Start multiple independent runs from one project. Choose and pin a branch for file browsing and future runs.
 - Open named project sessions in the header, reopen saved conversations and continue from recent tasks and results.
+- Edit existing UTF-8 files in a session draft. Runs snapshot saved edits and show the draft version in patch review.
 
 **Next**
 - Finish hosted verification with a verified patch, reload, cancellation, account isolation and 10 concurrent runs.
@@ -18,9 +19,7 @@
 
 **Repository workspace**
 - Verify project branch selection on the deployed app.
-- Save separate drafts per session across reloads. Edit in the browser, run tasks against a draft snapshot, and
-  review or apply the resulting patch. Surface conflicts if the draft changed during the run. Keep execution on
-  the runner without an interactive terminal or preview.
+- Apply the reviewed patch to a session draft. Show conflicts and keep both versions when the draft changed.
 - Pull remote changes with conflict handling. Commit reviewed changes to a work branch, and require an explicit user
   action to push it or open a PR. Keep GitHub credentials on the server.
 

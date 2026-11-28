@@ -163,6 +163,13 @@ For the named-sessions release, apply migration `0004_named_project_sessions` wi
 [runner](../worker/README.md#updating-a-running-service) before promoting the web deployment so it can read
 follow-up run specs.
 
+In a named public session, open **Files**, choose an existing UTF-8 text file, and select **Save draft**.
+Saving persists edits for that session and checks for concurrent changes. Each run uses the saved version taken
+at submission. Setup commands run against the pinned checkout before draft edits are applied. The Changes pane
+shows the run's draft version and flags a newer draft.
+
+Apply migration `0005_session_drafts` and update the runner before promoting the matching web deployment.
+
 See [GitHub App registration](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app)
 and [GitHub App user authorization](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app).
 

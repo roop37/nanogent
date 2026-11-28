@@ -105,7 +105,10 @@ it.skipIf(!available)(
       effort: "medium",
       setupCommands: ["printf setup > setup.txt"],
     });
-    const sandbox = await provider.create(spec);
+    const sandbox = await provider.create({
+      ...spec,
+      draft: { version: 1, files: [{ path: "index.js", text: "export const value = 'draft';\n" }] },
+    });
     const options = { timeoutSec: 5, maxOutputBytes: 2000 };
     try {
       const inspect = await docker([
@@ -117,6 +120,10 @@ it.skipIf(!available)(
       expect(inspect.stdout).toContain('"ReadonlyRootfs":true');
       expect(inspect.stdout).toContain('"CapDrop":["ALL"]');
       expect(inspect.stdout.trim()).toMatch(/\|\{\}$/);
+      expect(await sandbox.readFile("index.js", { maxBytes: 2000 })).toBe(
+        "export const value = 'draft';\n",
+      );
+      expect(await sandbox.diff({ maxBytes: 2000 })).toBe("");
       expect((await sandbox.exec("id -u", options)).stdout.trim()).toBe("1000");
       expect((await sandbox.exec("touch /root/forbidden", options)).exitCode).not.toBe(0);
       await sandbox.bash("export NANOGENT_TEST_VALUE=kept; cd /tmp", options);
@@ -147,8 +154,11 @@ it.skipIf(!available)(
         await expect(sandbox.writeFile(path, "bad")).rejects.toThrow();
       }
       await sandbox.writeFile("/workspace/new.txt", "new file");
+      await sandbox.writeFile("index.js", "export const value = 'updated';\n");
       const diff = await sandbox.diff({ maxBytes: 20_000 });
       expect(diff).toContain("new file");
+      expect(diff).toContain("-export const value = 'draft';");
+      expect(diff).toContain("+export const value = 'updated';");
       expect(diff).not.toContain("+setup");
       await sandbox.bash(undefined, { ...options, restart: true });
       expect((await sandbox.exec("printenv NANOGENT_ANTHROPIC_API_KEY", options)).stdout).toBe("");

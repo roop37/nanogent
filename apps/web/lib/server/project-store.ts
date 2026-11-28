@@ -1,7 +1,8 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
+import { DraftFilesSchema, type DraftSnapshot } from "@nanogent/core";
 import { type PostgresRunStore, postgresSchema as schema } from "@nanogent/store";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, exists, sql } from "drizzle-orm";
 import type { Project, ProjectInput, ProjectPin, ProjectSession } from "../projects";
 import { withWebDatabase } from "./db";
 import { credentialsSchema, exchangeGitHub, type GitHubConfig, seal, unseal } from "./github-auth";
@@ -10,6 +11,15 @@ import { testMode } from "./settings";
 
 type Connection = typeof schema.githubConnections.$inferSelect;
 type Access = { login: string; token: string };
+type DraftEdit = { version: number; path: string; text: string | null };
+
+function editDraft(draft: DraftSnapshot, edit: DraftEdit) {
+  const files = draft.files.filter(({ path }) => path !== edit.path);
+  if (edit.text !== null) files.push({ path: edit.path, text: edit.text });
+  const parsed = DraftFilesSchema.safeParse(files);
+  if (!parsed.success) throw new HttpError(413, "Drafts can contain up to 20 files and 256 KiB.");
+  return parsed.data;
+}
 
 export interface ProjectStore {
   list(owner: string): Promise<Project[]>;
@@ -18,6 +28,13 @@ export interface ProjectStore {
   updatePin(owner: string, id: string, expected: ProjectPin, pin: ProjectPin): Promise<boolean>;
   sessions(owner: string, projectId: string): Promise<ProjectSession[]>;
   session(owner: string, projectId: string, id: string): Promise<ProjectSession | undefined>;
+  draft(owner: string, projectId: string, id: string): Promise<DraftSnapshot | undefined>;
+  saveDraftFile(
+    owner: string,
+    projectId: string,
+    id: string,
+    edit: DraftEdit,
+  ): Promise<number | undefined>;
   createSession(
     owner: string,
     projectId: string,
@@ -65,6 +82,28 @@ export function createProjectStore(db: PostgresRunStore["db"]): ProjectStore {
       .select(sessionFields)
       .from(schema.projectSessions)
       .innerJoin(schema.projects, eq(schema.projects.id, schema.projectSessions.projectId));
+  const ownedSession = (owner: string, projectId: string, id: string) =>
+    and(
+      eq(schema.projectSessions.id, id),
+      eq(schema.projectSessions.projectId, projectId),
+      exists(
+        db
+          .select({ id: schema.projects.id })
+          .from(schema.projects)
+          .where(ownedProject(owner, projectId)),
+      ),
+    );
+  const draftFields = {
+    version: schema.projectSessions.draftVersion,
+    files: schema.projectSessions.draftFiles,
+  };
+  const readDraft = async (owner: string, projectId: string, id: string) =>
+    (
+      await db
+        .select(draftFields)
+        .from(schema.projectSessions)
+        .where(ownedSession(owner, projectId, id))
+    )[0];
   return {
     list: (owner) =>
       db
@@ -107,6 +146,22 @@ export function createProjectStore(db: PostgresRunStore["db"]): ProjectStore {
           and(ownedProject(owner, projectId), eq(schema.projectSessions.id, id)),
         )
       )[0],
+    draft: readDraft,
+    saveDraftFile: async (owner, projectId, id, edit) => {
+      const draft = await readDraft(owner, projectId, id);
+      if (!draft || draft.version !== edit.version) return undefined;
+      const [saved] = await db
+        .update(schema.projectSessions)
+        .set({ draftFiles: editDraft(draft, edit), draftVersion: edit.version + 1 })
+        .where(
+          and(
+            ownedSession(owner, projectId, id),
+            eq(schema.projectSessions.draftVersion, edit.version),
+          ),
+        )
+        .returning({ version: schema.projectSessions.draftVersion });
+      return saved?.version;
+    },
     createSession: async (owner, projectId, name) => {
       const [project] = await db
         .select(fields)
@@ -159,15 +214,22 @@ export function createProjectStore(db: PostgresRunStore["db"]): ProjectStore {
 const testState = globalThis as typeof globalThis & {
   nanogentProjects?: Map<string, Project[]>;
   nanogentProjectSessions?: Map<string, ProjectSession[]>;
+  nanogentSessionDrafts?: Map<string, DraftSnapshot>;
   nanogentProjectDisconnected?: Set<string>;
 };
 function fakeProjectStore(): ProjectStore {
   testState.nanogentProjects ??= new Map();
   testState.nanogentProjectSessions ??= new Map();
+  testState.nanogentSessionDrafts ??= new Map();
   testState.nanogentProjectDisconnected ??= new Set();
   const projects = testState.nanogentProjects;
   const sessions = testState.nanogentProjectSessions;
+  const drafts = testState.nanogentSessionDrafts;
   const disconnected = testState.nanogentProjectDisconnected;
+  const findSession = (owner: string, projectId: string, id: string) =>
+    projects.get(owner)?.some((project) => project.id === projectId)
+      ? sessions.get(projectId)?.find((session) => session.id === id)
+      : undefined;
   return {
     list: async (owner) => projects.get(owner) ?? [],
     get: async (owner, id) => projects.get(owner)?.find((project) => project.id === id),
@@ -196,10 +258,17 @@ function fakeProjectStore(): ProjectStore {
       projects.get(owner)?.some((project) => project.id === projectId)
         ? (sessions.get(projectId) ?? [])
         : [],
-    session: async (owner, projectId, id) =>
-      projects.get(owner)?.some((project) => project.id === projectId)
-        ? sessions.get(projectId)?.find((session) => session.id === id)
-        : undefined,
+    session: async (owner, projectId, id) => findSession(owner, projectId, id),
+    draft: async (owner, projectId, id) =>
+      findSession(owner, projectId, id) ? (drafts.get(id) ?? { version: 0, files: [] }) : undefined,
+    saveDraftFile: async (owner, projectId, id, edit) => {
+      if (!findSession(owner, projectId, id)) return undefined;
+      const draft = drafts.get(id) ?? { version: 0, files: [] };
+      if (draft.version !== edit.version) return undefined;
+      const version = edit.version + 1;
+      drafts.set(id, { version, files: editDraft(draft, edit) });
+      return version;
+    },
     createSession: async (owner, projectId, name) => {
       const project = projects.get(owner)?.find((candidate) => candidate.id === projectId);
       if (!project) return undefined;

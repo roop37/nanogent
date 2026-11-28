@@ -8,6 +8,7 @@ import {
 } from "@daytonaio/sdk";
 import {
   capOutput,
+  DraftSnapshotSchema,
   type EventSink,
   type ExecOptions,
   type ExecResult,
@@ -76,7 +77,9 @@ export class DaytonaSandboxProvider implements SandboxProvider {
       repo: true,
       setupCommands: true,
       limits: true,
-    }).parse(input);
+    })
+      .extend({ draft: DraftSnapshotSchema.optional() })
+      .parse(input);
     signal?.throwIfAborted();
     if ("url" in spec.repo) {
       const url = new URL(spec.repo.url);
@@ -150,7 +153,8 @@ export class DaytonaSandboxProvider implements SandboxProvider {
           );
         const allowed =
           this.options.allowRestrictedTierNetwork ?? this.options.environment !== "production";
-        if (!restricted || !allowed) throw new Error("Daytona agent network isolation failed");
+        if (!restricted || !allowed || spec.draft?.files.length)
+          throw new Error("Daytona agent network isolation failed");
         await this.options.events.emit({
           type: "log",
           data: {
@@ -159,6 +163,9 @@ export class DaytonaSandboxProvider implements SandboxProvider {
               "Daytona restricted tier: egress remains limited to essential services, including git hosts and package registries. Public repositories only.",
           },
         });
+      }
+      if (spec.draft) {
+        for (const file of spec.draft.files) await sandbox.writeFile(file.path, file.text, signal);
       }
       success(
         await sandbox.exec(

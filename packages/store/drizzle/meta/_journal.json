@@ -36,6 +36,13 @@
       "when": 1795871434268,
       "tag": "0004_named_project_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1795872312970,
+      "tag": "0005_session_drafts",
+      "breakpoints": true
     }
   ]
 }

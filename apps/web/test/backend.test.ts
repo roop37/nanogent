@@ -197,8 +197,24 @@ describe.skipIf(!dockerAvailable)("web Postgres admission", () => {
     expect(await store.sessions(other, saved.id)).toEqual([]);
     expect(await store.session(other, saved.id, named.id)).toBeUndefined();
     expect(await store.sessions(owner, saved.id)).toEqual([named]);
+    const draftId = [owner, saved.id, named.id] as const;
+    const edit = { version: 0, path: "README.md", text: "Draft one\n" };
+    expect(await store.saveDraftFile(other, saved.id, named.id, edit)).toBeUndefined();
+    expect(await store.saveDraftFile(...draftId, edit)).toBe(1);
+    expect(await store.saveDraftFile(...draftId, edit)).toBeUndefined();
     const initial = spec();
     await backend.submit(initial, owner, saved.id, named.id);
+    expect(
+      await store.saveDraftFile(...draftId, { ...edit, version: 1, text: "Draft two\n" }),
+    ).toBe(2);
+    expect(await pg.store.draft(initial.id)).toEqual({
+      version: 1,
+      files: [{ path: edit.path, text: edit.text }],
+    });
+    expect(await backend.get(owner, initial.id)).toMatchObject({
+      draftVersion: 1,
+      draftChanged: true,
+    });
     await expect(backend.submit(spec(), owner, saved.id, named.id)).rejects.toThrow();
     await expect(backend.submit(spec(), other, saved.id, named.id)).rejects.toThrow(
       "Session not found",

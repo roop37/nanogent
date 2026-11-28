@@ -141,3 +141,9 @@ admission per owner. A partial unique index enforces one active run per session.
 of recent completed tasks and their written results in the run spec. The executor passes those turns to the model
 and supplies only the existing checkout fields to the sandbox. The header keeps open tabs in per-account browser
 session storage. The project page can reopen a saved session after its tab has closed.
+
+Session drafts store bounded existing text-file edits and a version. Browser saves compare the version before
+writing. Admission copies the draft to a run snapshot in the same transaction that inserts the queued run.
+The runner applies it after setup and network isolation, then records the workspace baseline for patch review.
+The dashboard shows the snapshot version and whether the session has advanced. Snapshots stay outside run specs,
+event payloads and browser run-list responses.

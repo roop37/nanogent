@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { type ReactNode, useEffect } from "react";
 import type { ProjectSession } from "@/lib/projects";
 import { active, type RunView } from "@/lib/types";
 import { useRuns } from "./shell";
@@ -13,11 +13,13 @@ export function SessionConversation({
   repo,
   canRun,
   initial,
+  children,
 }: {
   session: ProjectSession;
   repo: string;
   canRun: boolean;
   initial: RunView[];
+  children?: ReactNode;
 }) {
   const { runs, openEditor } = useRuns();
   const { id, projectId, name, branch, commitSha } = session;
@@ -60,38 +62,54 @@ export function SessionConversation({
             </Button>
           ))}
       </header>
-      {!history.length ? (
-        <p className="text-sm text-muted-foreground">No runs yet.</p>
-      ) : (
-        <ol className="space-y-4" aria-label="Session conversation">
-          {history.map((run) => (
-            <li key={run.spec.id} className="space-y-3 rounded border border-border p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-sm font-medium">You</span>
-                <Link
-                  href={`/runs/${run.spec.id}`}
-                  prefetch={false}
-                  className="flex items-center gap-2 text-sm text-link"
-                >
-                  View run <Status state={run.state} />
-                </Link>
-              </div>
-              <p className="whitespace-pre-wrap break-words">{run.spec.task}</p>
-              {(run.result?.summary || run.result?.failureReason) && (
-                <div className="space-y-2 border-t border-border pt-3">
-                  <p className="text-sm font-medium">Result</p>
-                  {run.result.summary && (
-                    <p className="whitespace-pre-wrap break-words">{run.result.summary}</p>
-                  )}
-                  {run.result.failureReason && (
-                    <p className="break-words text-destructive">{run.result.failureReason}</p>
-                  )}
+      <nav
+        aria-label="Session views"
+        className="flex gap-4 border-b border-border pb-2 text-sm text-link"
+      >
+        <Link href={sessionHref} prefetch={false} aria-current={children ? undefined : "page"}>
+          Conversation
+        </Link>
+        <Link
+          href={`${sessionHref}?file=`}
+          prefetch={false}
+          aria-current={children ? "page" : undefined}
+        >
+          Files
+        </Link>
+      </nav>
+      {children ??
+        (!history.length ? (
+          <p className="text-sm text-muted-foreground">No runs yet.</p>
+        ) : (
+          <ol className="space-y-4" aria-label="Session conversation">
+            {history.map((run) => (
+              <li key={run.spec.id} className="space-y-3 rounded border border-border p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-sm font-medium">You</span>
+                  <Link
+                    href={`/runs/${run.spec.id}`}
+                    prefetch={false}
+                    className="flex items-center gap-2 text-sm text-link"
+                  >
+                    View run <Status state={run.state} />
+                  </Link>
                 </div>
-              )}
-            </li>
-          ))}
-        </ol>
-      )}
+                <p className="whitespace-pre-wrap break-words">{run.spec.task}</p>
+                {(run.result?.summary || run.result?.failureReason) && (
+                  <div className="space-y-2 border-t border-border pt-3">
+                    <p className="text-sm font-medium">Result</p>
+                    {run.result.summary && (
+                      <p className="whitespace-pre-wrap break-words">{run.result.summary}</p>
+                    )}
+                    {run.result.failureReason && (
+                      <p className="break-words text-destructive">{run.result.failureReason}</p>
+                    )}
+                  </div>
+                )}
+              </li>
+            ))}
+          </ol>
+        ))}
     </section>
   );
 }

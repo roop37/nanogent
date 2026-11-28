@@ -127,6 +127,13 @@ async function executeLockedRun(runId: string, deps: ExecuteDeps): Promise<RunRe
   try {
     await publish();
     return await new Executor().execute(record.spec, {
+      loadDraft: async () => {
+        if (record.draftVersion === null) return undefined;
+        const snapshot = await store.draft(runId);
+        if (!snapshot || snapshot.version !== record.draftVersion)
+          throw new Error("Run draft snapshot is unavailable");
+        return snapshot;
+      },
       brain: deps.brain,
       events,
       signal,

@@ -157,6 +157,21 @@ test("reopens named sessions and sends follow-ups with their own history and pin
   }
 
   const first = await createSession("Documentation");
+  await page
+    .getByRole("navigation", { name: "Session views" })
+    .getByRole("link", { name: "Files" })
+    .click();
+  await page.getByRole("link", { name: "README.md", exact: true }).click();
+  const text = "# Draft documentation\nSave this across reloads.\n";
+  await page.getByRole("textbox", { name: "README.md", exact: true }).fill(text);
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(page.getByText("Saved draft version 1.")).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "README.md", exact: true })).toHaveValue(text);
+  const staleDraft = await context.request.put(`/api${first}/draft`, {
+    data: { path: "README.md", text: "Overwrite a newer version", version: 0 },
+  });
+  expect(staleDraft.status()).toBe(409);
   await page.getByRole("link", { name: "Start session", exact: true }).click();
   await expect(page.getByRole("heading", { name: "New run", exact: true })).toBeVisible({
     timeout: 15_000,
@@ -167,7 +182,17 @@ test("reopens named sessions and sends follow-ups with their own history and pin
     timeout: 15_000,
   });
   const firstRun = await context.request.get(`/api/runs/${firstRunId}`);
-  expect(await firstRun.json()).toMatchObject({ run: { sessionId: first.split("/").at(-1) } });
+  expect(await firstRun.json()).toMatchObject({
+    run: { sessionId: first.split("/").at(-1), draftVersion: 1, draftChanged: false },
+  });
+  const changedDraft = await context.request.put(`/api${first}/draft`, {
+    data: { path: "README.md", text: "Another draft version\n", version: 1 },
+  });
+  expect(changedDraft.status()).toBe(200);
+  await page.reload();
+  await expect(
+    page.getByText(/The session draft has changed since this run started/),
+  ).toBeVisible();
 
   const moved = await context.request.patch(`/api${projectPath}/branches`, {
     data: { branch: "feature/docs", expected: pin },
@@ -190,6 +215,7 @@ test("reopens named sessions and sends follow-ups with their own history and pin
   expect(await followUp.json()).toMatchObject({
     run: {
       sessionId: first.split("/").at(-1),
+      draftVersion: 2,
       spec: {
         repo: { ref: pin.commitSha },
         conversation: [
@@ -218,6 +244,10 @@ test("reopens named sessions and sends follow-ups with their own history and pin
   ]);
   const foreign = await context.request.post("/api/runs", { data: otherTask });
   expect(foreign.status()).toBe(404);
+  const foreignDraft = await context.request.put(`/api${first}/draft`, {
+    data: { path: "README.md", text: "Foreign edit", version: 2 },
+  });
+  expect(foreignDraft.status()).toBe(404);
   await page.goto("/");
   await expect(editors.getByRole("link", { name: "Documentation", exact: true })).toHaveCount(0);
 });

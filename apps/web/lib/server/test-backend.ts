@@ -3,6 +3,7 @@ import type { RunEvent, RunEventInput, RunSpec } from "@nanogent/core";
 import { active, type RunView } from "../types";
 import type { Backend } from "./api";
 import { demoRuns } from "./demo-runs";
+import { withProjectStore } from "./project-store";
 import { testMode } from "./settings";
 
 type Entry = { owner: string; run: RunView; events: RunEvent[]; scripted?: true };
@@ -214,7 +215,10 @@ export function fakeBackend(): Backend {
     get: async (owner, id) => {
       const e = entries.get(id);
       if (!e || e.owner !== owner) return undefined;
-      return e.run;
+      const { projectId, sessionId, draftVersion } = e.run;
+      if (!projectId || !sessionId) return e.run;
+      const draft = await withProjectStore((store) => store.draft(owner, projectId, sessionId));
+      return { ...e.run, draftChanged: draft?.version !== draftVersion };
     },
     events: async (id, from) => {
       const e = entries.get(id);
@@ -244,12 +248,17 @@ export function fakeBackend(): Backend {
     }),
     submit: async (spec: RunSpec, owner, projectId, sessionId) => {
       const now = new Date().toISOString();
+      const draft =
+        projectId && sessionId
+          ? await withProjectStore((store) => store.draft(owner, projectId, sessionId))
+          : undefined;
       const e: Entry = {
         owner,
         run: {
           spec,
           ...(projectId && { projectId }),
           ...(sessionId && { sessionId }),
+          ...(draft && { draftVersion: draft.version }),
           state: "running",
           createdAt: now,
           updatedAt: now,

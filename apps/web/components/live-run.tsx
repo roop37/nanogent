@@ -338,6 +338,14 @@ export function LiveRun({
   const changes = (
     <section className="changes-pane" aria-label="Changes">
       <h2 className="pane-title">Changes</h2>
+      {run.draftVersion !== undefined && (
+        <p className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
+          {run.draftVersion
+            ? `Based on draft version ${run.draftVersion}.`
+            : "Based on the session’s starting commit."}
+          {run.draftChanged && " The session draft has changed since this run started."}
+        </p>
+      )}
       {patch ? (
         <Diff diff={patch} notify={setMessage} />
       ) : (

@@ -1,5 +1,7 @@
 import {
   assertTransition,
+  type DraftSnapshot,
+  DraftSnapshotSchema,
   type RunEvent,
   type RunEventInput,
   RunEventSchema,
@@ -24,6 +26,7 @@ export interface StoredRun extends RunRecord {
   ownerId: string | null;
   projectId: string | null;
   sessionId: string | null;
+  draftVersion: number | null;
   cancelRequested: boolean;
 }
 const terminal = (state: RunState) => ["completed", "failed", "canceled"].includes(state);
@@ -65,11 +68,15 @@ export class PostgresRunStore implements RunStore {
     options: { ownerId?: string; projectId?: string; sessionId?: string } = {},
   ): Promise<void> {
     const valid = RunSpecSchema.parse(this.clean(RunSpecSchema.parse(spec)));
+    let draft: DraftSnapshot | null = null;
     if (options.sessionId) {
       const [session] =
         options.ownerId && options.projectId
           ? await this.db
-              .select({ id: schema.projectSessions.id })
+              .select({
+                version: schema.projectSessions.draftVersion,
+                files: schema.projectSessions.draftFiles,
+              })
               .from(schema.projectSessions)
               .innerJoin(schema.projects, eq(schema.projects.id, schema.projectSessions.projectId))
               .where(
@@ -81,6 +88,7 @@ export class PostgresRunStore implements RunStore {
               )
           : [];
       if (!session) throw new Error("Session not found");
+      if (session.version > 0) draft = DraftSnapshotSchema.parse(session);
     } else if (options.projectId) {
       const [project] = options.ownerId
         ? await this.db
@@ -95,13 +103,28 @@ export class PostgresRunStore implements RunStore {
         : [];
       if (!project) throw new Error("Project not found");
     }
-    await this.db.insert(schema.runs).values({
+    const row = {
       id: valid.id,
       spec: valid,
       ownerId: options.ownerId ?? null,
       projectId: options.projectId ?? null,
       sessionId: options.sessionId ?? null,
-    });
+      draftVersion: draft?.version ?? null,
+    };
+    if (draft) {
+      const snapshot = draft;
+      await this.db.transaction(async (tx) => {
+        await tx.insert(schema.runs).values(row);
+        await tx.insert(schema.runDrafts).values({ runId: valid.id, snapshot });
+      });
+    } else await this.db.insert(schema.runs).values(row);
+  }
+  async draft(runId: string): Promise<DraftSnapshot | undefined> {
+    const [row] = await this.db
+      .select({ snapshot: schema.runDrafts.snapshot })
+      .from(schema.runDrafts)
+      .where(eq(schema.runDrafts.runId, RunIdSchema.parse(runId)));
+    return row && DraftSnapshotSchema.parse(row.snapshot);
   }
   private async locked(tx: Transaction, runId: string) {
     const [row] = await tx
@@ -216,6 +239,7 @@ export class PostgresRunStore implements RunStore {
       ownerId: row.ownerId,
       projectId: row.projectId,
       sessionId: row.sessionId,
+      draftVersion: row.draftVersion,
       cancelRequested: row.cancelRequested,
     };
   }

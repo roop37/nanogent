@@ -5,6 +5,7 @@ import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import {
+  DraftSnapshotSchema,
   type ExecOptions,
   type ExecResult,
   ExecResultSchema,
@@ -157,6 +158,10 @@ export class DockerSandboxProvider implements SandboxProvider {
           ...(signal && { signal }),
         }),
       );
+      if (spec.draft) {
+        for (const file of DraftSnapshotSchema.parse(spec.draft).files)
+          await sandbox.writeFile(file.path, file.text, signal);
+      }
       requireSuccess(
         await sandbox.exec(
           "git -c core.hooksPath=/dev/null add -A && if ! git rev-parse --verify HEAD >/dev/null 2>&1 || ! git diff --cached --quiet; then git -c core.hooksPath=/dev/null -c user.name=nanogent-baseline -c user.email=baseline@nanogent.local commit --no-gpg-sign -m nanogent-baseline; fi",

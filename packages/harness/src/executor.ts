@@ -1,6 +1,7 @@
 import {
   type Brain,
   Budget,
+  type DraftSnapshot,
   type EventSink,
   type RunResult,
   RunResultSchema,
@@ -20,6 +21,7 @@ export interface ExecutorDeps {
   transition(state: RunState): Promise<void>;
   signal?: AbortSignal;
   approve?: Approver;
+  loadDraft?: () => Promise<DraftSnapshot | undefined>;
 }
 export class Executor {
   async execute(input: RunSpec, deps: ExecutorDeps): Promise<RunResult> {
@@ -43,8 +45,15 @@ export class Executor {
         signal.throwIfAborted();
       }
       await deps.transition("running");
+      const draft = await deps.loadDraft?.();
       sandbox = await deps.provider.create(
-        { id: spec.id, repo: spec.repo, setupCommands: spec.setupCommands, limits: spec.limits },
+        {
+          id: spec.id,
+          repo: spec.repo,
+          setupCommands: spec.setupCommands,
+          limits: spec.limits,
+          ...(draft && { draft }),
+        },
         signal,
       );
       signal.throwIfAborted();

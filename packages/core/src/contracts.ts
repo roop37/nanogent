@@ -1,6 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { z } from "zod";
 import type { Budget } from "./budget.js";
+import type { DraftSnapshot } from "./draft.js";
 import type { RunEvent, RunEventInput } from "./events.js";
 import type {
   ExecResult,
@@ -61,7 +62,9 @@ export interface Tool<Input = unknown> {
 }
 
 /** No credentials or model configuration cross the sandbox boundary. */
-export type SandboxSpec = Pick<RunSpec, "id" | "repo" | "setupCommands" | "limits">;
+export type SandboxSpec = Pick<RunSpec, "id" | "repo" | "setupCommands" | "limits"> & {
+  draft?: DraftSnapshot;
+};
 export interface SandboxProvider {
   create(spec: SandboxSpec, signal?: AbortSignal): Promise<Sandbox>;
 }

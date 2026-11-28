@@ -24,6 +24,9 @@ export function createBackend(db: PostgresRunStore["db"], notifier?: RunnerNotif
         id: schema.runs.id,
         createdAt: schema.runs.createdAt,
         updatedAt: schema.runs.updatedAt,
+        currentDraftVersion: sql<
+          number | null
+        >`(select draft_version from project_sessions where id = ${schema.runs.sessionId})`,
         turns: sql<number>`count(*) filter (where ${schema.runEvents.type} = 'model.response')::int`,
         toolCalls: sql<number>`count(*) filter (where ${schema.runEvents.type} = 'tool.call')::int`,
         costUsd: sql<string>`coalesce(sum((${schema.runEvents.data}->'usage'->>'costUsd')::numeric) filter (where ${schema.runEvents.type} = 'model.response'), 0)`,
@@ -49,6 +52,12 @@ export function createBackend(db: PostgresRunStore["db"], notifier?: RunnerNotif
           spec: record.spec,
           ...(record.projectId && { projectId: record.projectId }),
           ...(record.sessionId && { sessionId: record.sessionId }),
+          ...(record.sessionId && {
+            draftVersion: record.draftVersion ?? 0,
+            draftChanged:
+              row.currentDraftVersion !== null &&
+              row.currentDraftVersion !== (record.draftVersion ?? 0),
+          }),
           state: record.state,
           ...(record.result ? { result: record.result } : {}),
           cancelRequested: record.cancelRequested,
