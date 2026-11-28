@@ -45,7 +45,7 @@ import { Dialog, Kbd, Popover, Select, Toast, Tooltip } from "./ui/primitives";
 const Palette = dynamic(() => import("./palette").then((m) => m.Palette));
 
 type Allowance = { activeCount: number; charged: number };
-type Config = { dailyCap: number; maxCost: number; models: string[]; environment: string };
+type Config = { dailyCap: number; maxCost: number; defaultModel: string; environment: string };
 const RunsContext = createContext<{
   runs: RunView[];
   clock: number;
@@ -577,8 +577,11 @@ export function Shell({
               Up to 3 active runs. Resets at midnight UTC.
             </p>
           </Popover>
-          <span title={config.models[0]} className="desktop-status font-mono">
-            {modelName(config.models[0] ?? "")}
+          <span
+            title={`Default model: ${config.defaultModel}`}
+            className="desktop-status font-mono"
+          >
+            {modelName(config.defaultModel)}
           </span>
           <span className="desktop-status">{config.environment}</span>
         </footer>

@@ -4,7 +4,6 @@ import { z } from "zod";
 export const ModelSchema = z.enum(["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]);
 export type Model = z.infer<typeof ModelSchema>;
 export const DEFAULT_MODEL: Model = "claude-haiku-5-5";
-// The only model the hosted service offers in production.
 export const PRODUCTION_MODEL: Model = "claude-sonnet-5-5";
 
 // USD per 1M tokens; verify against Anthropic pricing before changing.

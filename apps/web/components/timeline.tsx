@@ -33,10 +33,15 @@ function Content({ step, running, notify }: { step: Step; running: boolean; noti
   }
   switch (event.type) {
     case "tool.call": {
+      if (event.data.name === "submit" && !step.result?.data.isError)
+        return (
+          <p className="text-muted-foreground">
+            {step.result ? "Result submitted" : "Submitting result"}
+          </p>
+        );
       const input = toolInput(event);
       const operation = inputText(input, "command");
       const path = inputText(input, "path");
-      const summary = inputText(input, "summary");
       const inline =
         operation === "str_replace"
           ? `${inputText(input, "old_str")
@@ -53,8 +58,7 @@ function Content({ step, running, notify }: { step: Step; running: boolean; noti
                 .join("\n")
             : "";
       return (
-        <div className={event.data.name === "submit" ? "submit-block" : ""}>
-          {event.data.name === "submit" && <p className="mb-2 font-medium">Final summary</p>}
+        <div>
           <TerminalBlock
             command={
               event.data.name === "bash"
@@ -63,7 +67,7 @@ function Content({ step, running, notify }: { step: Step; running: boolean; noti
                   ? "submit"
                   : `${operation || event.data.name} ${path}`
             }
-            text={[summary, inline, step.result?.data.output].filter(Boolean).join("\n")}
+            text={[inline, step.result?.data.output].filter(Boolean).join("\n")}
             running={running && !step.result}
             error={step.result?.data.isError}
             truncated={step.result?.data.truncated}
@@ -138,8 +142,6 @@ function Content({ step, running, notify }: { step: Step; running: boolean; noti
     case "run.result":
       return event.data.failureReason ? (
         <p className="reason-block">{event.data.failureReason}</p>
-      ) : event.data.summary ? (
-        <p className="whitespace-pre-wrap text-muted-foreground">{event.data.summary}</p>
       ) : null;
     case "budget.exceeded":
       return (
@@ -184,7 +186,13 @@ export function Timeline({
   loaded: boolean;
   notify: Notify;
 }) {
-  const steps = useMemo(() => groupTimeline(events), [events]);
+  const steps = useMemo(
+    () =>
+      groupTimeline(events).filter(
+        ({ event }) => event.type !== "run.result" || event.data.failureReason,
+      ),
+    [events],
+  );
   const viewport = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   const wasRunning = useRef(running);

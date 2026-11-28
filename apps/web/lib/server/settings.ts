@@ -1,5 +1,5 @@
 import "server-only";
-import { DEFAULT_MODEL, PRODUCTION_MODEL } from "@nanogent/config";
+import { DEFAULT_MODEL, ModelSchema, PRODUCTION_MODEL } from "@nanogent/config";
 import { z } from "zod";
 export function settings(env: Record<string, string | undefined> = process.env) {
   const cap = z.coerce
@@ -13,11 +13,21 @@ export function settings(env: Record<string, string | undefined> = process.env) 
     .positive()
     .safeParse(env.NANOGENT_MAX_RUN_COST_USD ?? 1);
   if (!cap.success || !max.success) throw new Error("Invalid web budget configuration");
+  const production = env.NANOGENT_ENV === "production";
+  const fallbackModel = production ? PRODUCTION_MODEL : DEFAULT_MODEL;
+  const configured = env.NANOGENT_WEB_MODELS?.split(",").map((id) => id.trim());
+  const parsed = z
+    .array(ModelSchema)
+    .nonempty()
+    .safeParse(configured ?? [fallbackModel]);
+  if (!parsed.success) throw new Error("Invalid web model configuration");
+  const models = [...new Set(parsed.data)];
   return {
-    environment: env.NANOGENT_ENV === "production" ? "prod" : "dev",
+    environment: production ? "prod" : "dev",
     dailyCap: cap.data,
     maxCost: Math.min(max.data, cap.data),
-    models: [env.NANOGENT_ENV === "production" ? PRODUCTION_MODEL : DEFAULT_MODEL],
+    defaultModel: parsed.data[0] ?? fallbackModel,
+    models,
   };
 }
 export function testMode(env: Record<string, string | undefined> = process.env) {

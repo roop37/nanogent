@@ -86,12 +86,14 @@ function Verification({
             : commandDuration(verify.durationMs)}
         </p>
       )}
-      <TerminalBlock
-        command={`$ ${verify?.command ?? run.spec.verifyCommand ?? "No verification command"}`}
-        text={verify?.output || (verify ? "No output." : "")}
-        error={!!verify && verify.exitCode !== 0}
-        notify={notify}
-      />
+      {(verify || run.spec.verifyCommand) && (
+        <TerminalBlock
+          command={`$ ${verify?.command ?? run.spec.verifyCommand}`}
+          text={verify?.output || (verify ? "No output." : "")}
+          error={!!verify && verify.exitCode !== 0}
+          notify={notify}
+        />
+      )}
     </section>
   );
 }
@@ -182,6 +184,7 @@ export function LiveRun({
   const [panelOpen, setPanelOpen] = useState(true);
   const [layout, setLayout] = useState<Layout>();
   const [restored, setRestored] = useState(false);
+  const [showActivity, setShowActivity] = useState(false);
   const cursor = useRef(1);
   const dismiss = useCallback(() => setMessage(""), []);
   const id = initial.spec.id;
@@ -195,6 +198,20 @@ export function LiveRun({
       ? "The verification command failed."
       : verificationReason(run);
   const patch = run.result?.diff ?? run.diffSnapshot;
+  const resultEvent = events.findLast((event) => event.type === "run.result");
+  const summary = run.result?.summary ?? resultEvent?.data.summary;
+  const writtenResult = run.state === "completed" && !patch && !!summary?.trim();
+  const showDetails = !writtenResult || showActivity;
+  const checkFailed =
+    (run.result?.verify != null && run.result.verify.exitCode !== 0) ||
+    (verification?.type === "verify.result" && verification.data.exitCode !== 0);
+  const unverifiedLabel = checkFailed
+    ? "Verification failed"
+    : !run.spec.verifyCommand
+      ? "No verification configured"
+      : running
+        ? "Verification pending"
+        : "Not verified";
   const cost = costLevel(run.progress.costUsd, run.spec.limits.maxCostUsd);
   useEffect(() => {
     const online = () => setRetry((value) => value + 1);
@@ -362,7 +379,7 @@ export function LiveRun({
                 Verified
               </>
             ) : (
-              "Not verified"
+              unverifiedLabel
             )}
           </span>
           <span className="run-id" title={id}>
@@ -381,7 +398,9 @@ export function LiveRun({
             </Button>
           )}
         </div>
-        {!verified && <p className="verification-reason">{reason}</p>}
+        {!verified && run.spec.verifyCommand && !running && !checkFailed && (
+          <p className="verification-reason">{reason}</p>
+        )}
       </header>
       <dl className="run-metrics">
         <div>
@@ -436,7 +455,35 @@ export function LiveRun({
           This run ended without a result. No verification or diff was recorded.
         </p>
       )}
-      {mobile ? (
+      {summary?.trim() && (!writtenResult || !showActivity) && (
+        <section
+          className={`run-result ${writtenResult ? "run-result-primary" : ""}`}
+          aria-label="Result"
+        >
+          <div className="pane-title">
+            <h2>Result</h2>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void copyText(summary, setMessage, "Copied result")}
+            >
+              Copy result
+            </Button>
+          </div>
+          {/* biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard users need to scroll long results. */}
+          <section className="run-result-text" tabIndex={0} aria-label="Result text">
+            {summary}
+          </section>
+        </section>
+      )}
+      {writtenResult && (
+        <div className="run-result-navigation">
+          <Button variant="outline" size="sm" onClick={() => setShowActivity(!showActivity)}>
+            {showActivity ? "Back to result" : "View activity"}
+          </Button>
+        </div>
+      )}
+      {showDetails && mobile && (
         <Tabs defaultValue="activity" className="mobile-run-tabs">
           <TabsList aria-label="Run areas">
             <TabsTrigger value="activity">Activity</TabsTrigger>
@@ -453,7 +500,8 @@ export function LiveRun({
             </details>
           </TabsContent>
         </Tabs>
-      ) : (
+      )}
+      {showDetails && !mobile && (
         <>
           <div className="run-panes">
             <Group

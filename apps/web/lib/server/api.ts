@@ -1,5 +1,5 @@
 import "server-only";
-import { DEFAULT_MODEL, ModelSchema } from "@nanogent/config";
+import { ModelSchema } from "@nanogent/config";
 import {
   createRunId,
   DEFAULT_LIMITS,
@@ -41,7 +41,7 @@ export const submissionSchema = z.strictObject({
   task: z.string().trim().min(1).max(12000),
   verifyCommand: z.string().trim().min(1).max(2000).optional(),
   setupCommands: z.array(z.string().trim().min(1).max(2000)).max(10).default([]),
-  model: ModelSchema.default(DEFAULT_MODEL),
+  model: ModelSchema.optional(),
   maxCostUsd: z.number().finite().positive(),
 });
 export type Action = "list" | "submit" | "get" | "events" | "cancel";
@@ -85,7 +85,8 @@ export function createApi(deps: ApiDependencies) {
         if (!parsed.success)
           throw new HttpError(400, "Check the repository, task, commands, model, and cost limit.");
         const data = parsed.data;
-        if (!config.models.includes(data.model) || data.maxCostUsd > config.maxCost)
+        const model = data.model ?? config.defaultModel;
+        if (!config.models.includes(model) || data.maxCostUsd > config.maxCost)
           throw new HttpError(400, "Model or cost limit is not allowed.");
         spec = RunSpecSchema.parse({
           id: createRunId(),
@@ -93,7 +94,7 @@ export function createApi(deps: ApiDependencies) {
           task: data.task,
           setupCommands: data.setupCommands,
           ...(data.verifyCommand ? { verifyCommand: data.verifyCommand } : {}),
-          model: data.model,
+          model,
           effort: "medium",
           refusalFallback: false,
           limits: { ...DEFAULT_LIMITS, maxCostUsd: data.maxCostUsd },

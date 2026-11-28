@@ -61,7 +61,7 @@ test("sign-in stays centered and hides the footer on short screens", async ({ pa
   await expect(page.locator(".auth-footer")).toBeHidden();
   await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeInViewport();
 });
-test("overview and new run show readable durations and the fixed model", async ({
+test("overview shows readable durations and new run shows model pricing", async ({
   page,
   context,
 }) => {
@@ -92,9 +92,13 @@ test("overview and new run show readable durations and the fixed model", async (
   await page.goto("/runs/new");
   await expect(page.locator(".status-bar").getByText("Haiku 5.5", { exact: true })).toHaveAttribute(
     "title",
-    "claude-haiku-5-5",
+    "Default model: claude-haiku-5-5",
   );
-  await expect(page.getByText("Haiku 5.5", { exact: true }).first()).toBeVisible();
+  await expect(page.getByLabel("Anthropic model")).toHaveValue("claude-haiku-5-5");
+  await expect(page.locator("#model-pricing")).toHaveText("$0.1 input / $0.5 output per 1M tokens");
+  await page.getByLabel("Anthropic model").selectOption("claude-sonnet-5-5");
+  await expect(page.locator("#model-pricing")).toHaveText("$2 input / $10 output per 1M tokens");
+  await expect(page.getByLabel("Max cost (USD)")).toHaveValue("0.1");
   await page.getByText("Advanced", { exact: false }).click();
   await page.getByLabel("Setup commands").focus();
   const actions = page.getByRole("button", { name: "Start run" });

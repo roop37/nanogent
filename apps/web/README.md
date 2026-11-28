@@ -27,7 +27,8 @@ are included. The production build needs no credentials and makes no calls to Ne
 | `NANOGENT_DATABASE_URL` | Neon Postgres connection URL for the branch containing runs and Auth users |
 | `NANOGENT_RUNNER_URL` | Optional. The runner's wake-up endpoint, e.g. `http://203.0.113.10:8787/wake`. Without it the runner finds new runs on its next sweep |
 | `NANOGENT_WAKE_SECRET` | Optional, at least 32 characters, shared with the runner. Used to sign wake-ups |
-| `NANOGENT_ENV` | `development` offers Haiku only; `production` offers Sonnet only |
+| `NANOGENT_ENV` | Sets the default web model to Haiku in development and Sonnet in production |
+| `NANOGENT_WEB_MODELS` | Optional comma-separated Anthropic model IDs. The first is the default. Example: `claude-sonnet-5-5,claude-haiku-5-5` |
 | `NANOGENT_DAILY_CAP_USD` | Per-user daily model-cost admission budget, default `1` USD |
 | `NANOGENT_MAX_RUN_COST_USD` | Per-run ceiling, default `1` USD, also capped by the daily budget |
 | `NEXT_TELEMETRY_DISABLED` | Optional `1` to disable Next.js telemetry |
@@ -42,6 +43,10 @@ Do not configure Anthropic or Daytona keys in Vercel. They belong only in the ru
 runner credentials or the database URL to browser code or sandbox input.
 
 ## Limits and recovery
+
+New Run shows the allowed models and their input and output rates per million tokens. The run budget is set
+separately. Without `NANOGENT_WEB_MODELS`, only the environment's default model is offered. To enable a choice in
+production, set the list in Vercel Production and redeploy. The runner executes the selected model from the run spec.
 
 Only credential-free HTTPS URLs on `github.com`, `gitlab.com`, and `bitbucket.org` are accepted. The repository must be
 public; an inaccessible repository fails during clone. No server-side fetch is made to inspect arbitrary URLs.
@@ -87,10 +92,12 @@ Nothing here provisions or deploys services automatically.
    proposed changes. Do not create a replacement Auth project or run Better Auth migrations. These CLI commands can
    write `.env.local` and editor configuration; keep those files outside this repo and transfer needed values directly
    into the deployment's secret settings. Do not copy generated tooling into the checkout.
-2. Configure the web origin and development origin as trusted domains in Neon Auth. Check the branch's email/password
-   and verification settings. If verification is enabled, configure email delivery and test the verification callback
-   to `/`. Production email delivery requires custom SMTP. Test sign-up, sign-out, sign-in, wrong-password handling,
-   and session recovery after reload against the deployed Auth branch.
+2. In the Neon branch used by Vercel Production, add `https://nanogent.hoizr.com` and `https://nanogent.vercel.app`
+   under Auth → Configuration → Domains. Add each origin separately, including `https://` and omitting the trailing
+   slash. A `403 INVALID_ORIGIN` during sign-up or sign-in means Neon does not trust the origin of that request.
+   Check the branch's email/password and verification settings. If verification is enabled, configure email delivery
+   and test the verification callback to `/`. Production email delivery requires custom SMTP. Test sign-up, sign-out,
+   sign-in, wrong-password handling, and session recovery after reload against the deployed Auth branch.
 3. Set `NANOGENT_DATABASE_URL` in the human process environment, then run `pnpm db:migrate` at the repo root. This applies
    only the run/event schema; it does not modify `neon_auth`.
 4. Run `vercel link` at the repo root. Select the Next.js framework and set Root Directory to `apps/web`; enable access
@@ -103,6 +110,12 @@ Nothing here provisions or deploys services automatically.
 6. Set up the runner on a server as described in [the runner README](../worker/README.md): database URL, Anthropic key
    and the same `NANOGENT_WAKE_SECRET` as the web app. Open its wake port and set `NANOGENT_RUNNER_URL` on Vercel.
 7. Test one small public task, cancellation and reload recovery, and confirm another account cannot read its ID.
+
+For an existing deployment, push the release commit and confirm the Vercel production deployment serves it. Update
+the runner checkout to the same release using the [runner update steps](../worker/README.md#updating-a-running-service).
+The Result view and model picker need no run schema migration. Set `NANOGENT_WEB_MODELS` in Vercel Production before
+deploying if users should have a choice of models. After both services are ready, start a planning run and check its
+full written result. Start a second public-repo run with a verification command and check the verified patch on reload.
 
 SDK references: [Neon Next.js setup](https://neon.com/docs/auth/quick-start/nextjs-api-only),
 [managed Auth environment](https://neon.com/docs/ai/skills/neon-auth/references/managed-auth.md), and
@@ -124,6 +137,10 @@ bar's connection indicator reports the last run-list request. Its budget include
 server's allowance calculation. Today and Earlier use UTC dates.
 
 ## Run review
+
+Result shows the full written answer for a planning or analysis task and the summary for a code change. Use **Copy
+result** to take the text with you. Completed runs with a written result and no patch open on Result, with **View
+activity** available for the session history. Verification records the optional command configured when starting the run.
 
 Activity groups each command with its result and follows new events while a run is active. Scroll up to read earlier
 output, then use **Jump to latest** to resume following. Reloading reconstructs the timeline from recorded events.
@@ -148,7 +165,7 @@ browser. Return paths must begin with a single `/`; external URLs, backslashes a
 Configure the providers on the existing Neon branch:
 
 1. GitHub: create an OAuth App under Settings → Developer settings. Set Homepage URL to
-   `https://nanogent.vercel.app` and Authorization callback URL to `{NEON_AUTH_BASE_URL}/callback/github`.
+   `https://nanogent.hoizr.com` and Authorization callback URL to `{NEON_AUTH_BASE_URL}/callback/github`.
    The base URL already ends in `/<db>/auth`, so the callback looks like
    `https://<endpoint>.neonauth.<region>.aws.neon.tech/<db>/auth/callback/github`.
 2. Google: create an OAuth client of type Web application. Add `{NEON_AUTH_BASE_URL}/callback/google` as an
@@ -156,8 +173,8 @@ Configure the providers on the existing Neon branch:
 3. Add each client ID and secret to the Neon branch under Auth → Settings → OAuth providers. The CLI alternative is
    `neon neon-auth oauth-provider add --provider-id github --oauth-client-id ... --oauth-client-secret ...`
    (use `google` for Google).
-4. Add `https://nanogent.vercel.app` under Auth → Domains, or run
-   `neon neon-auth domain add https://nanogent.vercel.app`.
+4. Confirm both web origins from the deployment steps are trusted. The trusted domains also control where OAuth and
+   email verification can redirect.
 
 Client secrets live only in Neon. Never commit them or put them in web environment variables. Providers redirect to
 Neon's callback, then return to `/` or the validated `next` path. Failed redirects return a plain error on sign-in.

@@ -102,16 +102,18 @@ export function builtInTools(workspace = "/workspace"): Tool[] {
     },
     {
       name: "submit",
-      description: "Submit the changes and a short summary for independent verification.",
+      description: "Submit the final result for the task.",
       risk: "read",
       inputSchema: submitInput,
       modelDefinition: {
         name: "submit",
-        description: "Submit a summary when finished.",
+        description: "Submit the final result. Include the full deliverable for written tasks.",
         eager_input_streaming: true,
         input_schema: {
           type: "object",
-          properties: { summary: { type: "string" } },
+          properties: {
+            summary: { type: "string", description: "Final answer shown to the user" },
+          },
           required: ["summary"],
           additionalProperties: false,
         },

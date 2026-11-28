@@ -49,6 +49,7 @@ test("signed-in submission streams events, survives reload, and shows a verified
   await page.goto("/runs/new");
   await page.getByLabel("Public repository URL").fill("https://github.com/example/calc");
   await page.getByLabel("Task", { exact: true }).fill("Fix the addition function");
+  await page.getByLabel("Anthropic model").selectOption("claude-sonnet-5-5");
   await page.getByText("Advanced", { exact: false }).click();
   await page.getByLabel("Verify command").fill("npm test");
   const submission = page.waitForResponse(
@@ -60,6 +61,7 @@ test("signed-in submission streams events, survives reload, and shows a verified
   expect(submitted.status()).toBe(202);
   const { id } = await submitted.json();
   await expect(page).toHaveURL(`/runs/${id}`, { timeout: 15000 });
+  await expect(page.locator(".run-metrics").getByText("Sonnet 5.5", { exact: true })).toBeVisible();
   const activity = page.getByRole("region", { name: "Activity", exact: true });
   await expect(activity.getByText("$ npm test", { exact: true })).toBeVisible();
   await expect(page.locator(".run-header").getByText("running", { exact: true })).toBeVisible();
@@ -93,7 +95,7 @@ test("signed-in submission streams events, survives reload, and shows a verified
   await page.reload();
   await expect(page.locator(".verification-badge")).toHaveText("Verified");
   await expect(activity.getByText("str_replace calc.js", { exact: true })).toHaveCount(1);
-  await expect(activity.locator(".timeline-step")).toHaveCount(9);
+  await expect(activity.locator(".timeline-step")).toHaveCount(8);
   expect(errors).toEqual([]);
 
   await page.setViewportSize({ width: 390, height: 844 });
@@ -108,6 +110,37 @@ test("signed-in submission streams events, survives reload, and shows a verified
   await expect(
     page.getByRole("table").getByRole("link", { name: "Fix the addition function" }).first(),
   ).toBeVisible();
+});
+
+test("a written result opens above the activity and can be copied", async ({ page, context }) => {
+  const plan = "CSV converter UI plan\n\n1. Add a file picker.\n2. Preview the first ten rows.";
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await context.addCookies([
+    { name: "nanogent-test-session", value: "signed-in", domain: "127.0.0.1", path: "/" },
+  ]);
+  await page.route(`**/api${verifiedRunPath}`, async (route) => {
+    const response = await route.fetch();
+    const data = await response.json();
+    delete data.run.spec.verifyCommand;
+    Object.assign(data.run.result, { summary: plan, diff: "", verify: null, verified: false });
+    await route.fulfill({ json: data });
+  });
+  await page.route(`**/api${verifiedRunPath}/events?*`, (route) =>
+    route.fulfill({ json: { events: [], nextSeq: 1, hasMore: false } }),
+  );
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(verifiedRunPath);
+  const result = page.getByRole("region", { name: "Result", exact: true });
+  await expect(result).toContainText("Preview the first ten rows.");
+  await expect(page.locator(".verification-badge")).toHaveText("No verification configured");
+  await result.getByRole("button", { name: "Copy result" }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(plan);
+  await page.getByRole("button", { name: "View activity" }).click();
+  await expect(page.getByRole("region", { name: "Activity", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Back to result" }).click();
+  await expect(result).toBeVisible();
+  await page.reload();
+  await expect(result).toContainText("Add a file picker.");
 });
 
 test("an active run can be canceled with confirmation and the keyboard shortcut", async ({

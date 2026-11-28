@@ -22,7 +22,7 @@ not put them in the repository.
 | `NANOGENT_SWEEP_SEC` | Idle look-up interval | `900` |
 | `NANOGENT_DRAIN_SEC` | Time given to running runs on shutdown | `300` |
 
-The model for each run comes from the run itself; the web app sets it from `NANOGENT_ENV`.
+The model for each run comes from the saved run spec. The web app validates it against its configured model list.
 
 ## Running
 
@@ -38,6 +38,27 @@ node apps/worker/dist/main.js
 `nanogent` user (uid 1002) with rootless Docker, the checkout in `/opt/nanogent/repo` and the variables above in
 `/etc/nanogent/runner.env` (`root:nanogent`, mode 640). Rootless Docker needs `DOCKER_HOST=unix:///run/user/1002/docker.sock`
 in that file; see [security](../../docs/security.md#runner-host).
+
+## Updating a running service
+
+On the runner host, update the service checkout on `main` and build the runner and its workspace dependencies:
+
+```sh
+cd /opt/nanogent/repo
+git pull --ff-only
+pnpm install --frozen-lockfile
+pnpm --filter @nanogent/worker... build
+```
+
+Restart `nanogent-runner` through systemd and check its local health endpoint. Use the configured port if it differs
+from 8787. Restarting lets active runs drain within the service timeout and loads the updated system prompt.
+
+```sh
+sudo systemctl restart nanogent-runner
+curl --fail --silent --show-error http://127.0.0.1:8787/healthz
+```
+
+The health endpoint confirms the runner is listening. A hosted task confirms queue pickup and execution.
 
 ## Waking the runner
 

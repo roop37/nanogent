@@ -19,7 +19,12 @@
     "@nanogent/web#build": {
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**"],
-      "env": ["NANOGENT_ENV", "NANOGENT_DAILY_CAP_USD", "NANOGENT_MAX_RUN_COST_USD"]
+      "env": [
+        "NANOGENT_ENV",
+        "NANOGENT_WEB_MODELS",
+        "NANOGENT_DAILY_CAP_USD",
+        "NANOGENT_MAX_RUN_COST_USD"
+      ]
     }
   }
 }

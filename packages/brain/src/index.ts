@@ -105,7 +105,7 @@ export class ClaudeBrain implements Brain {
             return { status: "failed", summary: "", failureReason: "No submit after reminder" };
           history.push({
             role: "user",
-            content: "Please finish the task and call submit with your summary.",
+            content: "Please finish the task and call submit with the requested deliverable.",
           });
           nudged = true;
           continue;

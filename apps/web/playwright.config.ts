@@ -17,6 +17,7 @@ export default defineConfig({
       NODE_ENV: "development",
       NANOGENT_ENV: "test",
       NANOGENT_WEB_TEST_MODE: "1",
+      NANOGENT_WEB_MODELS: "claude-haiku-5-5,claude-sonnet-5-5",
       NEXT_TELEMETRY_DISABLED: "1",
       WATCHPACK_POLLING: "true",
       NANOGENT_DAILY_CAP_USD: "1",

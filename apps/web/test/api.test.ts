@@ -177,7 +177,35 @@ describe("run route handlers", () => {
     expect(
       (await submit(request("/api/runs", { ...input, model: "claude-haiku-5-5" }))).status,
     ).toBe(400);
-    expect((await submit(request("/api/runs", { ...input, maxCostUsd: 1.01 }))).status).toBe(400);
+    expect(
+      (
+        await submit(
+          request("/api/runs", { ...input, model: "claude-sonnet-5-5", maxCostUsd: 1.01 }),
+        )
+      ).status,
+    ).toBe(400);
+  });
+  it("uses the configured default and persists any explicitly enabled model", async () => {
+    config = settings({
+      NANOGENT_WEB_MODELS: "claude-sonnet-5-5, claude-haiku-5-5, claude-sonnet-5-5",
+    });
+    expect(config.models).toEqual(["claude-sonnet-5-5", "claude-haiku-5-5"]);
+    for (const [requested, expected] of [
+      [undefined, "claude-sonnet-5-5"],
+      ["claude-haiku-5-5", "claude-haiku-5-5"],
+    ]) {
+      const response = await submit(request("/api/runs", { ...input, model: requested }));
+      expect(response.status).toBe(202);
+      expect(records.get((await response.json()).id)?.run.spec.model).toBe(expected);
+    }
+    expect(
+      (await submit(request("/api/runs", { ...input, model: "claude-opus-5-5" }))).status,
+    ).toBe(400);
+  });
+  it.each(["", "claude-haiku-5-5,unknown"])("rejects invalid model configuration %j", (models) => {
+    expect(() => settings({ NANOGENT_WEB_MODELS: models })).toThrow(
+      "Invalid web model configuration",
+    );
   });
   it("rejects malformed JSON, wrong content type, and oversized bodies", async () => {
     expect(

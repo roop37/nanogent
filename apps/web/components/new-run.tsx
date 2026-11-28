@@ -8,14 +8,16 @@ import { ProviderIcon } from "./provider-icon";
 import { useRuns } from "./shell";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import { Kbd } from "./ui/primitives";
+import { Kbd, Select } from "./ui/primitives";
 import { Textarea } from "./ui/textarea";
 export function NewRun({
   models,
+  defaultModel,
   maxCost,
   dailyCap,
 }: {
-  models: string[];
+  models: { id: string; input: number; output: number }[];
+  defaultModel: string;
   maxCost: number;
   dailyCap: number;
 }) {
@@ -23,6 +25,8 @@ export function NewRun({
   const { allowance } = useRuns();
   const [task, setTask] = useState("");
   const [cost, setCost] = useState(Math.min(0.1, maxCost));
+  const [model, setModel] = useState(defaultModel);
+  const pricing = models.find(({ id }) => id === model);
   const [repoError, setRepoError] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -147,7 +151,7 @@ export function NewRun({
                   event.target.style.height = "auto";
                   event.target.style.height = `${event.target.scrollHeight}px`;
                 }}
-                placeholder="What should change? Include the behavior you expect."
+                placeholder="Describe the changes, plan, or analysis you want."
               />
             </div>
             <p className="mt-2 text-right font-mono text-xs text-muted-foreground">
@@ -170,7 +174,7 @@ export function NewRun({
                     placeholder="npm test"
                   />
                   <p className="mt-2 text-sm text-muted-foreground">
-                    Run after the work finishes. Without this, the result is unverified.
+                    Runs after the task finishes. Leave empty for plans and other written results.
                   </p>
                 </div>
                 <div>
@@ -193,14 +197,28 @@ export function NewRun({
             </details>
             <div className="grid gap-6 sm:grid-cols-2">
               <div>
-                <p className="mb-2 text-sm font-medium">Model</p>
-                <input type="hidden" name="model" value={models[0]} />
-                <span
-                  title={models[0]}
-                  className="inline-flex rounded border px-3 py-2 font-mono text-xs"
+                <label className="mb-2 block text-sm font-medium" htmlFor="model">
+                  Anthropic model
+                </label>
+                <Select
+                  className="w-full"
+                  id="model"
+                  name="model"
+                  value={model}
+                  onChange={(event) => setModel(event.target.value)}
+                  aria-describedby={pricing ? "model-pricing" : undefined}
                 >
-                  {modelName(models[0] ?? "")}
-                </span>
+                  {models.map(({ id }) => (
+                    <option key={id} value={id}>
+                      {modelName(id)}
+                    </option>
+                  ))}
+                </Select>
+                {pricing && (
+                  <p id="model-pricing" className="mt-2 text-xs text-muted-foreground">
+                    ${pricing.input} input / ${pricing.output} output per 1M tokens
+                  </p>
+                )}
               </div>
               <div>
                 <label className="mb-2 block text-sm font-medium" htmlFor="maxCostUsd">
