@@ -17,6 +17,8 @@ export function projectConfig(): GitHubConfig | null {
 }
 
 const demoSha = "0123456789abcdef0123456789abcdef01234567";
+const docsSha = "123456789abcdef0123456789abcdef012345678";
+const docsBranch = "feature/docs";
 const fixtureFetch: typeof fetch = async (input) => {
   const url = new URL(input instanceof Request ? input.url : input);
   const path = url.pathname;
@@ -31,6 +33,16 @@ const fixtureFetch: typeof fetch = async (input) => {
     });
   if (/^\/repos\/example\/(calc|notes)\/commits$/.test(path))
     return Response.json([{ sha: demoSha }]);
+  if (path === "/repos/example/notes/branches")
+    return url.searchParams.get("page") === "2"
+      ? Response.json([{ name: docsBranch, commit: { sha: docsSha } }])
+      : Response.json([{ name: "main", commit: { sha: demoSha } }], {
+          headers: { Link: '<https://api.github.com>; rel="next"' },
+        });
+  if (path === `/repos/example/notes/branches/${encodeURIComponent(docsBranch)}`)
+    return Response.json({ name: docsBranch, commit: { sha: docsSha } });
+  if (path === "/repos/example/notes/contents" && url.searchParams.get("ref") === docsSha)
+    return Response.json([{ name: "GUIDE.md", path: "GUIDE.md", type: "file" }]);
   if (
     /^\/repos\/example\/(calc|notes)\/contents$/.test(path) &&
     url.searchParams.get("ref") === demoSha
@@ -66,15 +78,20 @@ export async function projectConnection(owner: string, config: GitHubConfig) {
 export async function resolveProjectRun(owner: string, projectId: string) {
   const config = projectConfig();
   if (!config) throw new HttpError(503, "GitHub project sessions are unavailable.");
-  const project = await withProjectStore((store) => store.get(owner, projectId));
-  if (!project) throw new HttpError(404, "Project not found.");
-  const { client } = await projectConnection(owner, config);
-  const [repo] = await client.authorizedRepos(project.installationId, [project.repositoryId]);
-  if (!repo) throw new HttpError(404, "Project repository is unavailable.");
+  const { repo, project } = await authorizedProject(owner, projectId, config);
   if (repo.private)
     throw new HttpError(
       403,
       "Private projects can be browsed here. Hosted sessions require a public repository.",
     );
   return { url: `https://github.com/${repo.full_name}`, ref: project.commitSha };
+}
+
+export async function authorizedProject(owner: string, projectId: string, config: GitHubConfig) {
+  const project = await withProjectStore((store) => store.get(owner, projectId));
+  if (!project) throw new HttpError(404, "Project not found.");
+  const { client } = await projectConnection(owner, config);
+  const [repo] = await client.authorizedRepos(project.installationId, [project.repositoryId]);
+  if (!repo) throw new HttpError(404, "Project repository is unavailable.");
+  return { client, repo, project };
 }

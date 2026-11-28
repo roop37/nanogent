@@ -37,3 +37,31 @@ export function requireSameOrigin(request: Request) {
     throw new HttpError(403, "Request origin is not allowed.");
   }
 }
+
+export async function readJson(
+  request: Request,
+  maxBytes: number,
+  invalid: string,
+  tooLarge: string,
+) {
+  const reader = request.body?.getReader();
+  if (!reader || !request.headers.get("content-type")?.startsWith("application/json"))
+    throw new HttpError(400, invalid);
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const item = await reader.read();
+    if (item.done) break;
+    size += item.value.byteLength;
+    if (size > maxBytes) {
+      await reader.cancel();
+      throw new HttpError(413, tooLarge);
+    }
+    chunks.push(item.value);
+  }
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown;
+  } catch {
+    throw new HttpError(400, invalid);
+  }
+}

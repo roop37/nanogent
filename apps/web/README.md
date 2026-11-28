@@ -150,6 +150,9 @@ repository access for the GitHub App. Import one or more repositories and open t
 pins the default branch at import. File previews display UTF-8 text up to 128 KiB. Disconnecting removes the saved
 credentials and keeps the user's imported project entries. Rotating the token key requires reconnecting GitHub.
 
+Choose **Change branch** on the project page to pin a branch's latest commit. File browsing and new sessions use
+the saved pin. Previously submitted runs keep their original commit.
+
 Open a public project and choose **New session** to start a run from its pinned commit. A project can have
 multiple independent runs. Open them from **Sessions** on the project page. The general **New run** form also
 lets you select an imported project or paste a public repository URL. Private projects support file browsing.

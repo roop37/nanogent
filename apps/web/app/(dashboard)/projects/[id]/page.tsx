@@ -2,6 +2,7 @@ import { FileText, Folder } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
+import { ProjectBranches } from "@/components/project-branches";
 import { Status } from "@/components/status";
 import { Button } from "@/components/ui/button";
 import { repositoryPath } from "@/lib/projects";
@@ -54,6 +55,13 @@ export default async function Page({
             </Button>
           )}
         </div>
+        {parts.length === 0 && (
+          <ProjectBranches
+            key={`${id}:${project.branch}:${project.commitSha}`}
+            id={id}
+            pin={{ branch: project.branch, commitSha: project.commitSha }}
+          />
+        )}
         {parts.length === 0 && (
           <section className="space-y-2" aria-label="Project sessions">
             <h2 className="font-medium">Sessions</h2>

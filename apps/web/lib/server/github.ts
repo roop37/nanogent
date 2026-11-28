@@ -1,6 +1,6 @@
 import "server-only";
 import { z } from "zod";
-import { commitSha, githubId, repositoryPath } from "../projects";
+import { branchName, commitSha, githubId, repositoryPath } from "../projects";
 import { HttpError } from "./guard";
 
 const id = z.int().positive().transform(String).pipe(githubId);
@@ -16,6 +16,7 @@ const repository = z.object({
   default_branch: z.string().min(1).max(255),
 });
 const installation = z.object({ id, account: z.object({ login }) });
+const branch = z.object({ name: branchName, commit: z.object({ sha: commitSha }) });
 const entry = z.object({
   name: z.string().max(255),
   path: repositoryPath,
@@ -135,6 +136,19 @@ export function github(access: string, fetcher: typeof fetch = fetch) {
       );
       if (!data[0]) throw new HttpError(409, "This GitHub repository has no commits yet.");
       return data[0].sha;
+    },
+    async branches(name: string, page: number) {
+      const { data, next } = await get(`${repoPath(name)}/branches`, z.array(branch).max(100), {
+        page: String(page),
+        per_page: "100",
+      });
+      return { branches: data.map((item) => item.name), next };
+    },
+    async branchHead(name: string, selected: string) {
+      const path = encodeURIComponent(branchName.parse(selected));
+      const { data } = await get(`${repoPath(name)}/branches/${path}`, branch);
+      if (data.name !== selected) throw new HttpError(404, "GitHub branch is unavailable.");
+      return data.commit.sha;
     },
     async content(name: string, sha: string, path: string) {
       const suffix = repositoryPath.parse(path).split("/").map(encodeURIComponent).join("/");

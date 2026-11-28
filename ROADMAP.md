@@ -8,6 +8,7 @@
   The dashboard supports live progress, cancellation and diff review. Daytona is an optional sandbox provider.
 - New Run offers the configured Anthropic models and shows model pricing separately from the run budget.
 - GitHub App connection and project import. Browse authorized repositories at a pinned default-branch commit.
+- Start multiple independent runs from one project. Choose and pin a branch for file browsing and future runs.
 
 **Next**
 - Finish hosted verification with a verified patch, reload, cancellation, account isolation and 10 concurrent runs.
@@ -15,7 +16,7 @@
   suite with larger, multi-step repositories so results can distinguish harness and model changes.
 
 **Repository workspace**
-- Verify GitHub App connection and project import against the deployed app. Add branch selection to imported projects.
+- Verify project branch selection on the deployed app.
 - Open multiple named sessions per project in the header. Save their conversations and separate drafts across reloads.
   Edit in the browser, run tasks against a draft snapshot, and review or apply the resulting patch. Surface conflicts
   if the draft changed during the run. Keep execution on the runner without an interactive terminal or preview.

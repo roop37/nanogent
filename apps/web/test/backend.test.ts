@@ -183,5 +183,11 @@ describe.skipIf(!dockerAvailable)("web Postgres admission", () => {
     await store.disconnect(owner);
     expect(await store.access(owner, config)).toBeNull();
     expect(await store.get(owner, saved.id)).toEqual(saved);
+    const changed = { branch: "feature/docs", commitSha: "b".repeat(40) };
+    const expected = { branch: saved.branch, commitSha: saved.commitSha };
+    expect(await store.updatePin(other, saved.id, expected, changed)).toBe(false);
+    expect(await store.updatePin(owner, saved.id, expected, changed)).toBe(true);
+    expect(await store.updatePin(owner, saved.id, expected, expected)).toBe(false);
+    expect(await store.get(owner, saved.id)).toEqual({ ...saved, ...changed });
   });
 });

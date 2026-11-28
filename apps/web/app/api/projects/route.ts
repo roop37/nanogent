@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { githubId } from "@/lib/projects";
 import { getSession } from "@/lib/server/auth";
-import { HttpError, requireSameOrigin, requireUser } from "@/lib/server/guard";
+import { HttpError, readJson, requireSameOrigin, requireUser } from "@/lib/server/guard";
 import { projectConfig, projectConnection } from "@/lib/server/project-runtime";
 import { withProjectStore } from "@/lib/server/project-store";
 
@@ -10,26 +10,15 @@ const selection = z.strictObject({
   repositories: z.array(githubId).min(1).max(10),
 });
 async function readSelection(request: Request) {
-  const reader = request.body?.getReader();
-  if (!reader || !request.headers.get("content-type")?.startsWith("application/json"))
-    throw new HttpError(400, "Select repositories to import.");
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  for (;;) {
-    const item = await reader.read();
-    if (item.done) break;
-    size += item.value.byteLength;
-    if (size > 4000) {
-      await reader.cancel();
-      throw new HttpError(413, "Project selection is too large.");
-    }
-    chunks.push(item.value);
-  }
-  try {
-    return selection.parse(JSON.parse(Buffer.concat(chunks).toString("utf8")));
-  } catch {
-    throw new HttpError(400, "Select up to 10 repositories to import.");
-  }
+  const input = await readJson(
+    request,
+    4000,
+    "Select repositories to import.",
+    "Project selection is too large.",
+  );
+  const result = selection.safeParse(input);
+  if (!result.success) throw new HttpError(400, "Select up to 10 repositories to import.");
+  return result.data;
 }
 
 export async function POST(request: Request) {

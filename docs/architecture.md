@@ -128,7 +128,9 @@ and file data, and the runner never receives GitHub credentials.
 The import catalog uses GitHub App user authorization, which covers repositories accessible to both the app and the
 user. Import checks every selected repository again and stores its default branch and head commit in an owner-scoped
 project row. The owner and repository ID make repeated imports idempotent. File browsing rechecks repository access
-and reads the stored commit. The dashboard renders bounded text previews as plain text. Disconnect removes the
-connection and keeps project records. A session started from a public project uses its pinned commit and stores
-the project ID on the run. Submission rechecks the signed-in user's GitHub repository access. Private projects
-support file browsing.
+and reads the stored commit. Changing the project branch rechecks GitHub access, resolves the selected branch head,
+and updates the branch and commit together. The update compares the previous pin to catch changes from another tab.
+Previously submitted runs retain their original commit in their run spec. The dashboard renders bounded text previews
+as plain text. Disconnect removes the connection and keeps project records. A session started from a public project
+uses its pinned commit and stores the project ID on the run. Submission rechecks the signed-in user's GitHub
+repository access. Private projects support file browsing.

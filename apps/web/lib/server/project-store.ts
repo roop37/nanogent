@@ -2,7 +2,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { type PostgresRunStore, postgresSchema as schema } from "@nanogent/store";
 import { and, asc, eq, sql } from "drizzle-orm";
-import type { Project, ProjectInput } from "../projects";
+import type { Project, ProjectInput, ProjectPin } from "../projects";
 import { withWebDatabase } from "./db";
 import { credentialsSchema, exchangeGitHub, type GitHubConfig, seal, unseal } from "./github-auth";
 import { HttpError } from "./guard";
@@ -15,6 +15,7 @@ export interface ProjectStore {
   list(owner: string): Promise<Project[]>;
   get(owner: string, id: string): Promise<Project | undefined>;
   save(owner: string, projects: ProjectInput[]): Promise<void>;
+  updatePin(owner: string, id: string, expected: ProjectPin, pin: ProjectPin): Promise<boolean>;
   connect(row: Connection): Promise<void>;
   disconnect(owner: string): Promise<void>;
   access(owner: string, config: GitHubConfig): Promise<Access | null>;
@@ -43,6 +44,8 @@ function accessCredentials(row: Connection, config: GitHubConfig) {
 export function createProjectStore(db: PostgresRunStore["db"]): ProjectStore {
   const ownerMatch = (owner: string) => eq(schema.githubConnections.ownerId, owner);
   const fresh = (row: Connection) => row.expiresAt.getTime() > Date.now() + 60_000;
+  const ownedProject = (owner: string, id: string) =>
+    and(eq(schema.projects.ownerId, owner), eq(schema.projects.id, id));
   return {
     list: (owner) =>
       db
@@ -51,12 +54,7 @@ export function createProjectStore(db: PostgresRunStore["db"]): ProjectStore {
         .where(eq(schema.projects.ownerId, owner))
         .orderBy(asc(schema.projects.fullName)),
     get: async (owner, id) =>
-      (
-        await db
-          .select(fields)
-          .from(schema.projects)
-          .where(and(eq(schema.projects.ownerId, owner), eq(schema.projects.id, id)))
-      )[0],
+      (await db.select(fields).from(schema.projects).where(ownedProject(owner, id)))[0],
     save: async (owner, projects) => {
       await db
         .insert(schema.projects)
@@ -65,6 +63,20 @@ export function createProjectStore(db: PostgresRunStore["db"]): ProjectStore {
           target: [schema.projects.ownerId, schema.projects.repositoryId],
           set: { fullName: sql`excluded.full_name`, installationId: sql`excluded.installation_id` },
         });
+    },
+    updatePin: async (owner, id, expected, pin) => {
+      const [updated] = await db
+        .update(schema.projects)
+        .set(pin)
+        .where(
+          and(
+            ownedProject(owner, id),
+            eq(schema.projects.branch, expected.branch),
+            eq(schema.projects.commitSha, expected.commitSha),
+          ),
+        )
+        .returning({ id: schema.projects.id });
+      return !!updated;
     },
     connect: async (row) => {
       const { ownerId, ...values } = row;
@@ -124,6 +136,17 @@ function fakeProjectStore(): ProjectStore {
           .filter((project) => !saved.has(project.repositoryId))
           .map((project) => ({ ...project, id: randomUUID() })),
       ]);
+    },
+    updatePin: async (owner, id, expected, pin) => {
+      const project = projects.get(owner)?.find((entry) => entry.id === id);
+      if (
+        !project ||
+        project.branch !== expected.branch ||
+        project.commitSha !== expected.commitSha
+      )
+        return false;
+      Object.assign(project, pin);
+      return true;
     },
     connect: async ({ ownerId }) => void disconnected.delete(ownerId),
     disconnect: async (owner) => void disconnected.add(owner),
