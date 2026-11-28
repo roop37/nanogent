@@ -1,5 +1,6 @@
 import type { RunEvent, RunRecord } from "@nanogent/core";
 export interface RunView extends RunRecord {
+  projectId?: string;
   createdAt: string;
   updatedAt: string;
   cancelRequested: boolean;

@@ -128,7 +128,7 @@ function fakeProjectStore(): ProjectStore {
     connect: async ({ ownerId }) => void disconnected.delete(ownerId),
     disconnect: async (owner) => void disconnected.add(owner),
     access: async (owner) =>
-      owner.endsWith("1") && !disconnected.has(owner)
+      (owner.endsWith("1") || owner.endsWith("3")) && !disconnected.has(owner)
         ? { login: "example", token: "scripted" }
         : null,
   };

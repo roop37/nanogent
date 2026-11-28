@@ -18,13 +18,12 @@ export function auth() {
 export async function getSession(): Promise<Session> {
   if (testMode()) {
     const value = (await cookies()).get("nanogent-test-session")?.value;
-    return value === "signed-in" || value === "empty"
+    const idSuffix =
+      value === "signed-in" ? 1 : value === "empty" ? 2 : value === "github" ? 3 : null;
+    return idSuffix
       ? {
           user: {
-            id:
-              value === "empty"
-                ? "00000000-0000-4000-8000-000000000002"
-                : "00000000-0000-4000-8000-000000000001",
+            id: `00000000-0000-4000-8000-00000000000${idSuffix}`,
             name: "Alex Morgan",
             email: "alex@example.com",
           },

@@ -358,7 +358,10 @@ export function LiveRun({
     <div className="run-workspace">
       <header className="run-header">
         <div className="run-breadcrumb">
-          <Link href="/" title="All runs">
+          <Link
+            href={run.projectId ? `/projects/${run.projectId}` : "/"}
+            title={run.projectId ? "Back to project" : "All runs"}
+          >
             {repoName(run)}
           </Link>
           <span aria-hidden="true">›</span>

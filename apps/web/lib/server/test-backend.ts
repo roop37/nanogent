@@ -198,9 +198,9 @@ export function fakeBackend(): Backend {
   }
   const entries = globalState.nanogentWebFake;
   return {
-    list: async (owner) =>
+    list: async (owner, projectId) =>
       [...entries.values()]
-        .filter((e) => e.owner === owner)
+        .filter((e) => e.owner === owner && (!projectId || e.run.projectId === projectId))
         .map((e) => {
           return e.run;
         })
@@ -236,12 +236,13 @@ export function fakeBackend(): Backend {
           0,
         ),
     }),
-    submit: async (spec: RunSpec, owner) => {
+    submit: async (spec: RunSpec, owner, projectId) => {
       const now = new Date().toISOString();
       const e: Entry = {
         owner,
         run: {
           spec,
+          ...(projectId && { projectId }),
           state: "running",
           createdAt: now,
           updatedAt: now,

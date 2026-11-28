@@ -16,7 +16,7 @@
     "nanogent": "pnpm build && node apps/cli/dist/bin.js",
     "test:docker": "pnpm build && pnpm --filter @nanogent/cli exec vitest run --config vitest.docker.config.ts && pnpm --filter @nanogent/evals exec vitest run --config vitest.docker.config.ts",
     "eval": "pnpm build && node apps/cli/dist/bin.js eval",
-    "db:migrate": "pnpm --filter @nanogent/core build && pnpm --filter @nanogent/store build && node packages/store/dist/pg/migrate.js"
+    "db:migrate": "bash scripts/db-migrate.sh"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.6",

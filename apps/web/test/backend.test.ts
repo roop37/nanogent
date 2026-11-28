@@ -142,6 +142,23 @@ describe.skipIf(!dockerAvailable)("web Postgres admission", () => {
     expect(await store.get(other, saved.id)).toBeUndefined();
     expect(await store.list(other)).toHaveLength(1);
 
+    const backend = createBackend(pg.db);
+    const firstSession = spec();
+    const secondSession = spec();
+    await backend.submit(firstSession, owner, saved.id);
+    await backend.submit(secondSession, owner, saved.id);
+    await backend.submit(spec(), owner);
+    const sessions = await backend.list(owner, saved.id);
+    expect(sessions).toHaveLength(2);
+    expect(sessions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ spec: firstSession, projectId: saved.id }),
+        expect.objectContaining({ spec: secondSession, projectId: saved.id }),
+      ]),
+    );
+    expect(await backend.list(other, saved.id)).toEqual([]);
+    await expect(backend.submit(spec(), other, saved.id)).rejects.toThrow("Project not found");
+
     const config: GitHubConfig = {
       slug: "fixture",
       clientId: "fixture",

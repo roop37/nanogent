@@ -22,6 +22,13 @@
       "when": 1795831668885,
       "tag": "0002_github_projects",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1795862807778,
+      "tag": "0003_project_sessions",
+      "breakpoints": true
     }
   ]
 }

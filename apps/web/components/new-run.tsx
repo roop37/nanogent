@@ -15,17 +15,22 @@ export function NewRun({
   defaultModel,
   maxCost,
   dailyCap,
+  initialProjectId,
+  projects,
 }: {
   models: { id: string; input: number; output: number }[];
   defaultModel: string;
   maxCost: number;
   dailyCap: number;
+  initialProjectId: string;
+  projects: { id: string; fullName: string; branch: string }[];
 }) {
   const router = useRouter();
   const { allowance } = useRuns();
   const [task, setTask] = useState("");
   const [cost, setCost] = useState(Math.min(0.1, maxCost));
   const [model, setModel] = useState(defaultModel);
+  const [projectId, setProjectId] = useState(initialProjectId);
   const pricing = models.find(({ id }) => id === model);
   const [repoError, setRepoError] = useState("");
   const [pending, setPending] = useState(false);
@@ -52,7 +57,7 @@ export function NewRun({
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                repoUrl: form.get("repoUrl"),
+                ...(projectId ? { projectId } : { repoUrl: form.get("repoUrl") }),
                 task: form.get("task"),
                 model: form.get("model"),
                 maxCostUsd: Number(form.get("maxCostUsd")),
@@ -85,55 +90,87 @@ export function NewRun({
               <h1 className="mt-5 text-2xl font-medium tracking-tight">New run</h1>
               <p className="mt-2 text-muted-foreground">Describe the change and how to check it.</p>
             </header>
-            <div>
-              <label className="mb-2 block text-sm font-medium" htmlFor="repoUrl">
-                Public repository URL
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-3 text-muted-foreground">
-                  <ProviderIcon provider="github" />
-                </span>
-                <Input
-                  className="pl-9"
-                  aria-invalid={!!repoError}
-                  aria-describedby="repo-help"
+            {projects.length > 0 && (
+              <div>
+                <label className="mb-2 block text-sm font-medium" htmlFor="projectId">
+                  Repository source
+                </label>
+                <Select
+                  id="projectId"
+                  className="w-full"
+                  value={projectId}
                   onChange={(event) => {
-                    let valid = true;
-                    try {
-                      const url = new URL(event.target.value);
-                      valid =
-                        url.protocol === "https:" &&
-                        ["github.com", "gitlab.com", "bitbucket.org"].includes(url.hostname) &&
-                        !url.username &&
-                        !url.password &&
-                        !url.port &&
-                        !url.search &&
-                        !url.hash &&
-                        /^\/[\w.-]+(?:\/[\w.-]+)+\/?$/.test(url.pathname);
-                    } catch {
-                      valid = !event.target.value;
-                    }
-                    const message = valid
-                      ? ""
-                      : "Use a public HTTPS repository on GitHub, GitLab, or Bitbucket.";
-                    event.target.setCustomValidity(message);
-                    setRepoError(message);
+                    setProjectId(event.target.value);
+                    setRepoError("");
+                    setError("");
                   }}
-                  id="repoUrl"
-                  name="repoUrl"
-                  type="url"
-                  required
-                  maxLength={2048}
-                  placeholder="https://github.com/owner/repository"
-                />
+                >
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.fullName} · {project.branch}
+                    </option>
+                  ))}
+                  <option value="">Paste a public repository URL</option>
+                </Select>
+                {projectId && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Runs use the project’s pinned commit. Hosted sessions support public
+                    repositories.
+                  </p>
+                )}
               </div>
-              <p
-                id="repo-help"
-                className={`mt-2 text-xs ${repoError ? "text-destructive" : "text-muted-foreground"}`}
-              >
-                {repoError || "HTTPS on GitHub, GitLab, or Bitbucket. Public repositories only."}
-              </p>
-            </div>
+            )}
+            {!projectId && (
+              <div>
+                <label className="mb-2 block text-sm font-medium" htmlFor="repoUrl">
+                  Public repository URL
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-3 text-muted-foreground">
+                    <ProviderIcon provider="github" />
+                  </span>
+                  <Input
+                    className="pl-9"
+                    aria-invalid={!!repoError}
+                    aria-describedby="repo-help"
+                    onChange={(event) => {
+                      let valid = true;
+                      try {
+                        const url = new URL(event.target.value);
+                        valid =
+                          url.protocol === "https:" &&
+                          ["github.com", "gitlab.com", "bitbucket.org"].includes(url.hostname) &&
+                          !url.username &&
+                          !url.password &&
+                          !url.port &&
+                          !url.search &&
+                          !url.hash &&
+                          /^\/[\w.-]+(?:\/[\w.-]+)+\/?$/.test(url.pathname);
+                      } catch {
+                        valid = !event.target.value;
+                      }
+                      const message = valid
+                        ? ""
+                        : "Use a public HTTPS repository on GitHub, GitLab, or Bitbucket.";
+                      event.target.setCustomValidity(message);
+                      setRepoError(message);
+                    }}
+                    id="repoUrl"
+                    name="repoUrl"
+                    type="url"
+                    required
+                    maxLength={2048}
+                    placeholder="https://github.com/owner/repository"
+                  />
+                </div>
+                <p
+                  id="repo-help"
+                  className={`mt-2 text-xs ${repoError ? "text-destructive" : "text-muted-foreground"}`}
+                >
+                  {repoError || "HTTPS on GitHub, GitLab, or Bitbucket. Public repositories only."}
+                </p>
+              </div>
+            )}
             <div>
               <label className="mb-2 block text-sm font-medium" htmlFor="task">
                 Task

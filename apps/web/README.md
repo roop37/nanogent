@@ -98,8 +98,9 @@ Nothing here provisions or deploys services automatically.
    Check the branch's email/password and verification settings. If verification is enabled, configure email delivery
    and test the verification callback to `/`. Production email delivery requires custom SMTP. Test sign-up, sign-out,
    sign-in, wrong-password handling, and session recovery after reload against the deployed Auth branch.
-3. Set `NANOGENT_DATABASE_URL` in the human process environment, then run `pnpm db:migrate` at the repo root. This applies
-   only the run/event schema; it does not modify `neon_auth`.
+3. Run `pnpm db:migrate` from the repo root on your computer. Paste the connection string for the target Neon database
+   at the hidden prompt, or export it as `NANOGENT_DATABASE_URL` for noninteractive use. This applies the Nanogent
+   schema and leaves the `neon_auth` schema alone.
 4. Run `vercel link` at the repo root. Select the Next.js framework and set Root Directory to `apps/web`; enable access
    to source outside that directory. Set Install Command to `cd ../.. && pnpm install --frozen-lockfile` and Build Command
    to `cd ../.. && pnpm exec turbo run build --filter=@nanogent/web`. Keep the default Next.js output directory.
@@ -148,6 +149,10 @@ GitHub. The existing Neon Auth sign-in remains separate. From **Import projects*
 repository access for the GitHub App. Import one or more repositories and open them in the sidebar. Each project
 pins the default branch at import. File previews display UTF-8 text up to 128 KiB. Disconnecting removes the saved
 credentials and keeps the user's imported project entries. Rotating the token key requires reconnecting GitHub.
+
+Open a public project and choose **New session** to start a run from its pinned commit. A project can have
+multiple independent runs. Open them from **Sessions** on the project page. The general **New run** form also
+lets you select an imported project or paste a public repository URL. Private projects support file browsing.
 
 See [GitHub App registration](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app)
 and [GitHub App user authorization](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app).

@@ -62,3 +62,19 @@ export async function projectConnection(owner: string, config: GitHubConfig) {
   if (!access) throw new HttpError(401, "Connect GitHub to continue.");
   return { login: access.login, client: projectGitHub(access.token) };
 }
+
+export async function resolveProjectRun(owner: string, projectId: string) {
+  const config = projectConfig();
+  if (!config) throw new HttpError(503, "GitHub project sessions are unavailable.");
+  const project = await withProjectStore((store) => store.get(owner, projectId));
+  if (!project) throw new HttpError(404, "Project not found.");
+  const { client } = await projectConnection(owner, config);
+  const [repo] = await client.authorizedRepos(project.installationId, [project.repositoryId]);
+  if (!repo) throw new HttpError(404, "Project repository is unavailable.");
+  if (repo.private)
+    throw new HttpError(
+      403,
+      "Private projects can be browsed here. Hosted sessions require a public repository.",
+    );
+  return { url: `https://github.com/${repo.full_name}`, ref: project.commitSha };
+}

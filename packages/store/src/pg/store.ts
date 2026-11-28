@@ -22,6 +22,7 @@ export type RunDatabase = PgDatabase<PgQueryResultHKT, typeof schema>;
 type Transaction = Parameters<Parameters<RunDatabase["transaction"]>[0]>[0];
 export interface StoredRun extends RunRecord {
   ownerId: string | null;
+  projectId: string | null;
   cancelRequested: boolean;
 }
 const terminal = (state: RunState) => ["completed", "failed", "canceled"].includes(state);
@@ -58,11 +59,31 @@ export class PostgresRunStore implements RunStore {
       );
     return value;
   }
-  async create(spec: RunSpec, options: { ownerId?: string } = {}): Promise<void> {
+  async create(
+    spec: RunSpec,
+    options: { ownerId?: string; projectId?: string } = {},
+  ): Promise<void> {
     const valid = RunSpecSchema.parse(this.clean(RunSpecSchema.parse(spec)));
-    await this.db
-      .insert(schema.runs)
-      .values({ id: valid.id, spec: valid, ownerId: options.ownerId ?? null });
+    if (options.projectId) {
+      const [project] = options.ownerId
+        ? await this.db
+            .select({ id: schema.projects.id })
+            .from(schema.projects)
+            .where(
+              and(
+                eq(schema.projects.id, options.projectId),
+                eq(schema.projects.ownerId, options.ownerId),
+              ),
+            )
+        : [];
+      if (!project) throw new Error("Project not found");
+    }
+    await this.db.insert(schema.runs).values({
+      id: valid.id,
+      spec: valid,
+      ownerId: options.ownerId ?? null,
+      projectId: options.projectId ?? null,
+    });
   }
   private async locked(tx: Transaction, runId: string) {
     const [row] = await tx
@@ -175,6 +196,7 @@ export class PostgresRunStore implements RunStore {
       state: RunStateSchema.parse(row.state),
       ...(row.result ? { result: RunResultSchema.parse(row.result) } : {}),
       ownerId: row.ownerId,
+      projectId: row.projectId,
       cancelRequested: row.cancelRequested,
     };
   }
@@ -210,14 +232,24 @@ export class PostgresRunStore implements RunStore {
       if (page.length < 100) return;
     }
   }
-  async list(options: { ownerId?: string; limit?: number } = {}): Promise<StoredRun[]> {
+  async list(
+    options: { ownerId?: string; projectId?: string; limit?: number } = {},
+  ): Promise<StoredRun[]> {
     const limit = options.limit ?? 100;
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1000)
       throw new Error("Invalid list limit");
+    if (options.projectId && !options.ownerId) throw new Error("Project runs require an owner");
     const rows = await this.db
       .select()
       .from(schema.runs)
-      .where(options.ownerId === undefined ? undefined : eq(schema.runs.ownerId, options.ownerId))
+      .where(
+        and(
+          options.ownerId === undefined ? undefined : eq(schema.runs.ownerId, options.ownerId),
+          options.projectId === undefined
+            ? undefined
+            : eq(schema.runs.projectId, options.projectId),
+        ),
+      )
       .orderBy(desc(schema.runs.createdAt), desc(schema.runs.id))
       .limit(limit);
     return rows.map((row) => this.record(row));

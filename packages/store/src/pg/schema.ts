@@ -17,6 +17,7 @@ export const runs = pgTable(
   {
     id: text("id").primaryKey(),
     ownerId: uuid("owner_id"),
+    projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
     spec: jsonb("spec").$type<RunSpec>().notNull(),
     state: text("state").$type<RunState>().notNull().default("queued"),
     result: jsonb("result").$type<RunResult>(),
@@ -24,7 +25,10 @@ export const runs = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     cancelRequested: boolean("cancel_requested").notNull().default(false),
   },
-  (table) => [index("runs_owner_created_idx").on(table.ownerId, table.createdAt)],
+  (table) => [
+    index("runs_owner_created_idx").on(table.ownerId, table.createdAt),
+    index("runs_owner_project_created_idx").on(table.ownerId, table.projectId, table.createdAt),
+  ],
 );
 
 export const runEvents = pgTable(

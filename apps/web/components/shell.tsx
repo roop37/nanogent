@@ -101,6 +101,8 @@ export function Shell({
   runsRef.current = runs;
   const current = runs.find((r) => pathname === `/runs/${r.spec.id}`);
   const currentProject = projects?.find((project) => pathname === `/projects/${project.id}`);
+  const runProjectId = currentProject?.id ?? current?.projectId;
+  const newRunHref = runProjectId ? `/runs/new?project=${runProjectId}` : "/runs/new";
   const groups = groupRuns(runs, clock);
   useEffect(() => {
     const update = () => {
@@ -202,12 +204,12 @@ export function Shell({
         !document.querySelector('[role="dialog"]')
       ) {
         event.preventDefault();
-        router.push("/runs/new");
+        router.push(newRunHref);
       }
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, [router, palette, drawer]);
+  }, [router, palette, drawer, newRunHref]);
   async function signOut() {
     setPalette(false);
     try {
@@ -228,7 +230,7 @@ export function Shell({
     if (pathname === tab.href) router.push(closeDestination(tabs, tab.href));
   }
   const commands = [
-    { label: "New run", hint: "N", icon: Plus, action: () => navigate("/runs/new") },
+    { label: "New run", hint: "N", icon: Plus, action: () => navigate(newRunHref) },
     {
       label: "Toggle sidebar",
       hint: "⌘ / Ctrl B",
@@ -303,7 +305,7 @@ export function Shell({
           <Button
             variant="outline"
             className="w-full justify-start"
-            onClick={() => navigate("/runs/new")}
+            onClick={() => navigate(newRunHref)}
           >
             <Plus />
             New run<Kbd>N</Kbd>
@@ -345,7 +347,7 @@ export function Shell({
           {runs.length === 0 && connected ? (
             <div className="px-4 text-muted-foreground">
               <p className="mb-3">Your runs will appear here.</p>
-              <Button variant="ghost" onClick={() => navigate("/runs/new")}>
+              <Button variant="ghost" onClick={() => navigate(newRunHref)}>
                 New run
               </Button>
             </div>
@@ -503,7 +505,7 @@ export function Shell({
             </Tooltip>
             <Tooltip label="New run (N)">
               <Link
-                href="/runs/new"
+                href={newRunHref}
                 aria-label="New run"
                 className="activity-item"
                 data-active={pathname === "/runs/new"}

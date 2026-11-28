@@ -40,7 +40,10 @@ export class RemoteController {
     private readonly notifier?: RunnerNotifier,
   ) {}
 
-  async submit(input: RunSpec, options: { ownerId?: string } = {}): Promise<string> {
+  async submit(
+    input: RunSpec,
+    options: { ownerId?: string; projectId?: string } = {},
+  ): Promise<string> {
     const spec = RunSpecSchema.parse(input);
     await this.store.create(spec, options);
     await this.store.emit(spec.id, { type: "run.created", data: { spec } });

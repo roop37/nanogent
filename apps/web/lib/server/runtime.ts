@@ -1,6 +1,7 @@
 import "server-only";
 import { type Backend, createApi } from "./api";
 import { getSession } from "./auth";
+import { resolveProjectRun } from "./project-runtime";
 import { settings, testMode } from "./settings";
 export async function withBackend<T>(work: (backend: Backend) => Promise<T>): Promise<T> {
   if (testMode()) {
@@ -10,4 +11,4 @@ export async function withBackend<T>(work: (backend: Backend) => Promise<T>): Pr
   const { withProductionBackend } = await import("./backend");
   return withProductionBackend(work);
 }
-export const api = createApi({ session: getSession, settings, withBackend });
+export const api = createApi({ session: getSession, settings, withBackend, resolveProjectRun });

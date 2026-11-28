@@ -12,43 +12,48 @@ import type { EventPage, RunView } from "../types";
 import { HttpError, requireSameOrigin, requireUser, type Session } from "./guard";
 import type { settings } from "./settings";
 export interface Backend {
-  list(owner: string): Promise<RunView[]>;
+  list(owner: string, projectId?: string): Promise<RunView[]>;
   get(owner: string, id: string): Promise<RunView | undefined>;
   events(id: string, from: number): Promise<EventPage>;
   withOwnerLock<T>(owner: string, work: () => Promise<T>): Promise<T>;
   allowance(owner: string): Promise<{ activeCount: number; charged: number }>;
-  submit(spec: RunSpec, owner: string): Promise<string>;
+  submit(spec: RunSpec, owner: string, projectId?: string): Promise<string>;
   cancel(id: string): Promise<void>;
 }
-export const submissionSchema = z.strictObject({
-  repoUrl: z
-    .url()
-    .max(2048)
-    .refine((value) => {
-      const url = new URL(value);
-      // Public git hosts keep repository input away from private network endpoints.
-      return (
-        url.protocol === "https:" &&
-        ["github.com", "gitlab.com", "bitbucket.org"].includes(url.hostname) &&
-        !url.username &&
-        !url.password &&
-        !url.port &&
-        !url.search &&
-        !url.hash &&
-        /^\/[\w.-]+(?:\/[\w.-]+)+\/?$/.test(url.pathname)
-      );
-    }, "Use a public HTTPS repository on GitHub, GitLab, or Bitbucket."),
+const publicRepoUrl = z
+  .url()
+  .max(2048)
+  .refine((value) => {
+    const url = new URL(value);
+    // Public git hosts keep repository input away from private network endpoints.
+    return (
+      url.protocol === "https:" &&
+      ["github.com", "gitlab.com", "bitbucket.org"].includes(url.hostname) &&
+      !url.username &&
+      !url.password &&
+      !url.port &&
+      !url.search &&
+      !url.hash &&
+      /^\/[\w.-]+(?:\/[\w.-]+)+\/?$/.test(url.pathname)
+    );
+  }, "Use a public HTTPS repository on GitHub, GitLab, or Bitbucket.");
+const submissionFields = {
   task: z.string().trim().min(1).max(12000),
   verifyCommand: z.string().trim().min(1).max(2000).optional(),
   setupCommands: z.array(z.string().trim().min(1).max(2000)).max(10).default([]),
   model: ModelSchema.optional(),
   maxCostUsd: z.number().finite().positive(),
-});
+};
+export const submissionSchema = z.union([
+  z.strictObject({ ...submissionFields, repoUrl: publicRepoUrl }),
+  z.strictObject({ ...submissionFields, projectId: z.uuid() }),
+]);
 export type Action = "list" | "submit" | "get" | "events" | "cancel";
 export interface ApiDependencies {
   session(): Promise<Session>;
   settings(): ReturnType<typeof settings>;
   withBackend<T>(work: (backend: Backend) => Promise<T>): Promise<T>;
+  resolveProjectRun?(owner: string, projectId: string): Promise<{ url: string; ref: string }>;
 }
 export function createApi(deps: ApiDependencies) {
   return async (action: Action, request: Request, id?: string): Promise<Response> => {
@@ -56,6 +61,7 @@ export function createApi(deps: ApiDependencies) {
       const user = requireUser(await deps.session());
       if (action === "submit" || action === "cancel") requireSameOrigin(request);
       let spec: RunSpec | undefined;
+      let projectId: string | undefined;
       const config = deps.settings();
       if (action === "submit") {
         if (!request.headers.get("content-type")?.startsWith("application/json"))
@@ -88,9 +94,15 @@ export function createApi(deps: ApiDependencies) {
         const model = data.model ?? config.defaultModel;
         if (!config.models.includes(model) || data.maxCostUsd > config.maxCost)
           throw new HttpError(400, "Model or cost limit is not allowed.");
+        projectId = "projectId" in data ? data.projectId : undefined;
+        const repo =
+          "repoUrl" in data
+            ? { url: data.repoUrl }
+            : await deps.resolveProjectRun?.(user.id, data.projectId);
+        if (!repo) throw new HttpError(503, "GitHub project sessions are unavailable.");
         spec = RunSpecSchema.parse({
           id: createRunId(),
-          repo: { url: data.repoUrl },
+          repo,
           task: data.task,
           setupCommands: data.setupCommands,
           ...(data.verifyCommand ? { verifyCommand: data.verifyCommand } : {}),
@@ -120,7 +132,10 @@ export function createApi(deps: ApiDependencies) {
                 "Daily budget is reserved or spent. Lower the run limit or try tomorrow (UTC).",
               );
             try {
-              return { id: await backend.submit(submitted, user.id) };
+              const id = projectId
+                ? await backend.submit(submitted, user.id, projectId)
+                : await backend.submit(submitted, user.id);
+              return { id };
             } catch {
               if (await backend.get(user.id, submitted.id))
                 return {
